@@ -15,5 +15,6 @@ export function absoluteUrl(path: string) {
 
 export const SEED_PAYOUT_IDS = [
   "out-tm-260903-kimryeon",
+  "out-tm-test-sample",
   "in-yeongseo-yeongdong",
 ] as const;
