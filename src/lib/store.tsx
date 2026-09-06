@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { SEED_PAYOUTS } from "./seed";
+import { RETIRED_PAYOUT_IDS } from "./paths";
 import type { Contract, Lodging, PayeeProfile, Payout, PayoutStatus } from "./types";
 
 const USER_KEY = "spm.userPayouts.v2";
@@ -57,15 +58,20 @@ function mergeState(raw: Partial<CaseState> | null): CaseState {
   return { ...emptyState, ...raw };
 }
 
+function withoutRetired(payouts: Payout[]) {
+  const retired = new Set<string>(RETIRED_PAYOUT_IDS);
+  return payouts.filter((p) => !retired.has(p.id));
+}
+
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [userPayouts, setUserPayouts] = useState<Payout[]>([]);
   const [state, setState] = useState<CaseState>(emptyState);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const storedPayouts = readJson<Payout[]>(USER_KEY, []);
+    const storedPayouts = withoutRetired(readJson<Payout[]>(USER_KEY, []));
     const storedState = mergeState(readJson<Partial<CaseState>>(STATE_KEY, emptyState));
-    setUserPayouts((current) => (current.length ? current : storedPayouts));
+    setUserPayouts((current) => withoutRetired(current.length ? current : storedPayouts));
     setState((current) => ({
       ...storedState,
       ...current,
@@ -89,7 +95,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [state, ready]);
 
   const payouts = useMemo(() => {
-    const extras = userPayouts.filter((p) => !SEED_PAYOUTS.some((s) => s.id === p.id));
+    const retired = new Set<string>(RETIRED_PAYOUT_IDS);
+    const extras = userPayouts.filter(
+      (p) => !SEED_PAYOUTS.some((s) => s.id === p.id) && !retired.has(p.id)
+    );
     const overrides = new Map(userPayouts.map((p) => [p.id, p]));
     const seeded = SEED_PAYOUTS.map((s) => {
       const over = overrides.get(s.id);

@@ -22,15 +22,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <header className="sticky top-0 z-40 border-b border-border/80 bg-[color:var(--navy)] text-white">
+      <header className="sticky top-0 z-40 border-b border-border/80 bg-card text-[color:var(--navy)]">
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between gap-3 px-4">
           <Link href="/" className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-8 shrink-0 items-center rounded-md bg-white px-1.5">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={COMPANY_LOGO} alt={COMPANY.name} className="h-6 w-auto" />
-            </span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={COMPANY_LOGO} alt={COMPANY.name} className="h-7 w-auto shrink-0" />
             <span className="min-w-0">
-              <span className="block text-[10px] font-semibold tracking-wider text-white/60">SPM</span>
+              <span className="block text-[10px] font-semibold tracking-wider text-[color:var(--gold-ink)]">
+                SPM
+              </span>
               <span className="block truncate text-sm font-bold leading-tight">스마트파트너 관리</span>
             </span>
           </Link>
@@ -42,7 +42,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   href={item.href}
                   className={cn(
                     buttonVariants({ variant: "ghost", size: "sm" }),
-                    "text-white/85 hover:bg-white/10 hover:text-white"
+                    "text-[color:var(--navy)]/80 hover:bg-black/5 hover:text-[color:var(--navy)]"
                   )}
                 >
                   {item.label}
