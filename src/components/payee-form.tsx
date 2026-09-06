@@ -8,6 +8,8 @@ import { submitPayee } from "@/lib/payee-inbox";
 import { payeeMissing } from "@/lib/payout-types";
 import { useStore } from "@/lib/store";
 import type { Payout } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import { ImagePlus } from "lucide-react";
 import { useState } from "react";
 
 async function fileToJpeg(file: File): Promise<string> {
@@ -122,31 +124,57 @@ export function PayeeForm({ payout }: { payout: Payout }) {
         />
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="idcard">신분증</Label>
-        <Input
-          id="idcard"
-          type="file"
-          accept="image/*"
-          onChange={async (e) => {
-            const file = e.target.files?.[0];
-            if (!file) return;
-            try {
-              setIdImage(await fileToJpeg(file));
-              setIdFileName(file.name);
-              setError("");
-            } catch {
-              setError("신분증 사진을 다시 선택해 주세요.");
-            }
-          }}
-        />
-        {idImage ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={idImage}
-            alt=""
-            className="max-h-36 w-full rounded-lg border object-contain bg-white"
+        <Label htmlFor="idcard">신분증 사진</Label>
+        <label
+          htmlFor="idcard"
+          className={cn(
+            "flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-4 py-4 text-center",
+            idImage
+              ? "border-[color:var(--navy)] bg-white"
+              : "border-[#c4a15a] bg-[#f3eee4]"
+          )}
+        >
+          <input
+            id="idcard"
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              try {
+                setIdImage(await fileToJpeg(file));
+                setIdFileName(file.name);
+                setError("");
+              } catch {
+                setError("신분증 사진을 다시 선택해 주세요.");
+              }
+            }}
           />
-        ) : null}
+          {idImage ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={idImage}
+                alt=""
+                className="max-h-36 w-full rounded-lg object-contain"
+              />
+              <span className="text-xs font-medium text-[color:var(--navy)]">
+                다시 선택{idFileName ? ` · ${idFileName}` : ""}
+              </span>
+            </>
+          ) : (
+            <>
+              <ImagePlus className="size-7 text-[#c4a15a]" />
+              <span className="inline-flex h-10 items-center rounded-lg bg-[color:var(--navy)] px-4 text-sm font-semibold text-white">
+                사진 선택
+              </span>
+              <span className="text-xs leading-relaxed text-muted-foreground">
+                주민등록증 또는 운전면허증 사진을 올려 주세요
+              </span>
+            </>
+          )}
+        </label>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">

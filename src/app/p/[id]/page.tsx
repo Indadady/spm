@@ -25,14 +25,15 @@ export default function PublicPayeePage() {
   }
 
   return (
-    <article className="mx-auto max-w-md px-4 py-6">
-      <header className="mb-5 text-center">
+    <div>
+      <header className="sticky top-0 z-10 border-b border-black/5 bg-white/95 px-4 py-2.5">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={COMPANY_LOGO} alt="" className="mx-auto mb-2 h-8 w-auto" />
-        <p className="text-xs text-muted-foreground">{COMPANY.name}</p>
-        <h1 className="mt-1 text-lg font-bold text-[color:var(--navy)]">입금 정보</h1>
+        <img src={COMPANY_LOGO} alt={COMPANY.name} className="h-8 w-auto" />
       </header>
-      <PayeeForm payout={payout} />
-    </article>
+      <article className="mx-auto max-w-md px-4 py-5">
+        <h1 className="mb-4 text-lg font-bold text-[color:var(--navy)]">입금 정보</h1>
+        <PayeeForm payout={payout} />
+      </article>
+    </div>
   );
 }
