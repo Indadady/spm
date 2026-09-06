@@ -13,6 +13,11 @@ export function SignPad({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const dirty = useRef(false);
+  const lastWidth = useRef(0);
+  const valueRef = useRef(value ?? "");
+  const onChangeRef = useRef(onChange);
+  valueRef.current = value ?? "";
+  onChangeRef.current = onChange;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -20,28 +25,51 @@ export function SignPad({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const fit = () => {
-      const ratio = Math.max(window.devicePixelRatio || 1, 1);
-      const w = canvas.offsetWidth;
-      const h = 180;
-      canvas.width = Math.round(w * ratio);
-      canvas.height = Math.round(h * ratio);
-      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    const style = () => {
       ctx.lineWidth = 2.4;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.strokeStyle = "#1c2834";
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, w, h);
-      if (value && !dirty.current) {
-        const img = new Image();
-        img.onload = () => ctx.drawImage(img, 0, 0, w, h);
-        img.src = value;
-      }
     };
 
-    fit();
-  }, [value]);
+    const paintBlank = (w: number, h: number) => {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, w, h);
+      style();
+    };
+
+    const drawFrom = (src: string, w: number, h: number) => {
+      if (!src) {
+        paintBlank(w, h);
+        return;
+      }
+      const img = new Image();
+      img.onload = () => {
+        paintBlank(w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        style();
+      };
+      img.src = src;
+    };
+
+    const fit = (preserve: boolean) => {
+      const ratio = Math.max(window.devicePixelRatio || 1, 1);
+      const w = canvas.offsetWidth;
+      const h = 180;
+      if (w < 2 || w === lastWidth.current) return;
+      const keep = preserve && dirty.current ? canvas.toDataURL("image/png") : "";
+      lastWidth.current = w;
+      canvas.width = Math.round(w * ratio);
+      canvas.height = Math.round(h * ratio);
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      drawFrom(keep || valueRef.current, w, h);
+    };
+
+    fit(false);
+    const ro = new ResizeObserver(() => fit(true));
+    ro.observe(canvas);
+    return () => ro.disconnect();
+  }, []);
 
   function pos(e: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current!;
@@ -52,7 +80,18 @@ export function SignPad({
   function snapshot() {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    onChange(canvas.toDataURL("image/jpeg", 0.72));
+    onChangeRef.current(canvas.toDataURL("image/jpeg", 0.72));
+  }
+
+  function endStroke(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!drawing.current) return;
+    drawing.current = false;
+    try {
+      canvasRef.current?.releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
+    }
+    snapshot();
   }
 
   return (
@@ -65,6 +104,7 @@ export function SignPad({
             const canvas = canvasRef.current;
             const ctx = canvas?.getContext("2d");
             if (!canvas || !ctx) return;
+            e.preventDefault();
             canvas.setPointerCapture(e.pointerId);
             drawing.current = true;
             dirty.current = true;
@@ -80,15 +120,8 @@ export function SignPad({
             ctx.lineTo(p.x, p.y);
             ctx.stroke();
           }}
-          onPointerUp={() => {
-            drawing.current = false;
-            snapshot();
-          }}
-          onPointerLeave={() => {
-            if (!drawing.current) return;
-            drawing.current = false;
-            snapshot();
-          }}
+          onPointerUp={endStroke}
+          onPointerCancel={endStroke}
         />
       </div>
       <div className="mt-2 flex justify-end print:hidden">
@@ -103,6 +136,10 @@ export function SignPad({
             dirty.current = false;
             ctx.fillStyle = "#ffffff";
             ctx.fillRect(0, 0, canvas.offsetWidth, 180);
+            ctx.lineWidth = 2.4;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            ctx.strokeStyle = "#1c2834";
             onChange("");
           }}
         >
