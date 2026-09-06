@@ -10,6 +10,17 @@ export function formatWon(n: number) {
   return `${Math.round(n).toLocaleString("ko-KR")}원`;
 }
 
+export function parseWonInput(raw: string) {
+  const digits = raw.replace(/[^\d]/g, "");
+  if (!digits) return 0;
+  return Number(digits);
+}
+
+export function formatWonInput(n: number) {
+  if (!n) return "";
+  return Math.round(n).toLocaleString("ko-KR");
+}
+
 export function formatDate(iso: string) {
   const [y, m, d] = iso.split("-").map(Number);
   if (!y || !m || !d) return iso;

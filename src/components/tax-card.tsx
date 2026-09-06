@@ -1,16 +1,21 @@
+"use client";
+
+import { GrossAmountField } from "@/components/gross-amount-field";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatWon } from "@/lib/format";
+import { useStore } from "@/lib/store";
 import { calcTax } from "@/lib/tax";
 import type { Payout } from "@/lib/types";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function TaxCard({ payout }: { payout: Payout }) {
+  const { updatePayout } = useStore();
   const tax = calcTax({
     method: payout.taxMethod,
     gross: payout.gross,
     days: payout.days,
   });
   const rows = [
-    ["지급 총액", tax.gross],
+    ["원천징수 이전", tax.gross],
     ["필요경비·공제", tax.expense],
     ["과세표준", tax.taxable],
     ["소득세", tax.incomeTax],
@@ -27,6 +32,12 @@ export function TaxCard({ payout }: { payout: Payout }) {
         </p>
       </CardHeader>
       <CardContent className="space-y-3">
+        <GrossAmountField
+          value={payout.gross}
+          taxMethod={payout.taxMethod}
+          days={payout.days}
+          onChange={(gross) => updatePayout(payout.id, { gross })}
+        />
         <div className="rounded-xl bg-[color:var(--navy)] px-4 py-3 text-white">
           <p className="text-xs text-white/70">실지급 / 실수령</p>
           <p className="text-2xl font-bold tracking-tight">{formatWon(tax.net)}</p>

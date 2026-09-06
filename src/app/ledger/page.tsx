@@ -50,7 +50,7 @@ export default function LedgerPage() {
                   <TableHead>유형</TableHead>
                   <TableHead>건</TableHead>
                   <TableHead>상대</TableHead>
-                  <TableHead className="text-right">총액</TableHead>
+                  <TableHead className="text-right">원천 전</TableHead>
                   <TableHead className="text-right">원천</TableHead>
                   <TableHead className="text-right">실지급</TableHead>
                   <TableHead>예정일</TableHead>

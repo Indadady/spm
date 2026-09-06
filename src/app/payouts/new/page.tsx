@@ -1,5 +1,6 @@
 "use client";
 
+import { GrossAmountField } from "@/components/gross-amount-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,7 +31,7 @@ function NewPayoutForm() {
   const [partner, setPartner] = useState("");
   const [eventName, setEventName] = useState("");
   const [clientName, setClientName] = useState("");
-  const [gross, setGross] = useState("");
+  const [gross, setGross] = useState(0);
   const [due, setDue] = useState(todaySeoulIso());
   const [memo, setMemo] = useState("");
 
@@ -45,6 +46,7 @@ function NewPayoutForm() {
       className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
+        if (!gross) return;
         const id = `pmt-${Date.now()}`;
         const payout: Payout = {
           id,
@@ -56,7 +58,7 @@ function NewPayoutForm() {
           eventName: eventName.trim() || undefined,
           clientName: clientName.trim() || undefined,
           needsContract: false,
-          gross: Number(gross.replace(/,/g, "")) || 0,
+          gross,
           taxMethod,
           dueDate: due,
           status: "collecting",
@@ -118,23 +120,6 @@ function NewPayoutForm() {
           placeholder="예: 태백고생대자연사박물관"
         />
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="gross">지출 총액 (세전)</Label>
-          <Input
-            id="gross"
-            inputMode="numeric"
-            value={gross}
-            onChange={(e) => setGross(e.target.value)}
-            required
-            placeholder="2000000"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="due">지급 예정일</Label>
-          <Input id="due" type="date" value={due} onChange={(e) => setDue(e.target.value)} />
-        </div>
-      </div>
       <div className="space-y-1.5">
         <Label>원천 방식</Label>
         <select
@@ -148,6 +133,18 @@ function NewPayoutForm() {
             </option>
           ))}
         </select>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <GrossAmountField
+          value={gross}
+          onChange={setGross}
+          taxMethod={taxMethod}
+          required
+        />
+        <div className="space-y-1.5">
+          <Label htmlFor="due">지급 예정일</Label>
+          <Input id="due" type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+        </div>
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="memo">메모</Label>
@@ -165,8 +162,8 @@ export default function NewPayoutPage() {
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">새 지출</h1>
       <p className="text-sm text-muted-foreground">
-        받는 사람에게 보낼 링크가 생깁니다. 이름·주민등록번호·신분증·본인 계좌를 받아 3.3%를 뺀 뒤
-        이체하면 됩니다. 이 브라우저에 저장됩니다.
+        원천징수 이전 금액을 넣으면 원천과 실지급이 바로 나옵니다. 받는 사람에게는 금액이 보이지
+        않습니다. 이 브라우저에 저장됩니다.
       </p>
       <Suspense>
         <NewPayoutForm />

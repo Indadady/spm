@@ -19,6 +19,7 @@ type Store = {
   payouts: Payout[];
   ready: boolean;
   addPayout: (p: Payout) => void;
+  updatePayout: (id: string, patch: Partial<Payout>) => void;
   setStatus: (id: string, status: PayoutStatus, paidDate?: string) => void;
   toggleEvidence: (id: string, evidenceId: string) => void;
   evidenceOn: (id: string, evidenceId: string) => boolean;
@@ -101,6 +102,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     payouts,
     ready,
     addPayout: (p) => setUserPayouts((prev) => [p, ...prev.filter((x) => x.id !== p.id)]),
+    updatePayout: (id, patch) =>
+      setUserPayouts((prev) => {
+        const exists = prev.some((p) => p.id === id);
+        const seed = SEED_PAYOUTS.find((p) => p.id === id);
+        const current = prev.find((p) => p.id === id) ?? seed;
+        if (!current) return prev;
+        const next = { ...current, ...patch };
+        if (exists) return prev.map((p) => (p.id === id ? next : p));
+        return [next, ...prev];
+      }),
     setStatus: (id, status, paidDate) =>
       setUserPayouts((prev) => {
         const exists = prev.some((p) => p.id === id);
