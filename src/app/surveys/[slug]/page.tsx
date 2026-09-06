@@ -10,11 +10,10 @@ import { useEffect, useState } from "react";
 export default function SurveyInboxPage() {
   const { slug } = useParams<{ slug: string }>();
   const survey = surveyById(slug);
-  const { ready, satisfactionOf } = useStore();
+  const { satisfactionOf } = useStore();
   const [origin, setOrigin] = useState("");
   useEffect(() => setOrigin(window.location.origin), []);
 
-  if (!ready) return <p className="text-sm text-muted-foreground">불러오는 중…</p>;
   if (!survey) return <p>설문을 찾을 수 없습니다.</p>;
 
   const rows = satisfactionOf(survey.id);

@@ -35,7 +35,7 @@ export default function LedgerPage() {
           법인 지출은 발주처 금액에서 3.3%를 뺀 이체액이 실제 나갑니다. 참고 수입은 따로 둡니다.
         </p>
       </div>
-      {!ready ? (
+      {payouts.length === 0 && !ready ? (
         <p className="text-sm text-muted-foreground">불러오는 중…</p>
       ) : (
         <>

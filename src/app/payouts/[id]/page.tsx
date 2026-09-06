@@ -32,8 +32,13 @@ export default function PayoutPage() {
   const [origin, setOrigin] = useState("");
   useEffect(() => setOrigin(window.location.origin), []);
 
-  if (!ready) return <p className="text-sm text-muted-foreground">불러오는 중…</p>;
-  if (!payout) return <p>해당 건을 찾을 수 없습니다.</p>;
+  if (!payout) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        {ready ? "해당 건을 찾을 수 없습니다." : "불러오는 중…"}
+      </p>
+    );
+  }
 
   const type = typeById(payout.typeId);
   const collectUrl = origin ? `${origin}/p/${payout.id}` : "";

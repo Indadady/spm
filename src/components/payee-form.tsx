@@ -34,7 +34,7 @@ async function fileToJpeg(file: File): Promise<string> {
 }
 
 export function PayeeForm({ payout }: { payout: Payout }) {
-  const { payeeOf, savePayee } = useStore();
+  const { payeeOf, savePayee, ready } = useStore();
   const existing = payeeOf(payout.id);
   const tax = calcTax({ method: payout.taxMethod, gross: payout.gross });
   const [name, setName] = useState(existing?.name ?? payout.partnerName);
@@ -66,6 +66,10 @@ export function PayeeForm({ payout }: { payout: Payout }) {
           privacyAgreed: agree,
           submittedAt: new Date().toISOString(),
         };
+        if (!ready) {
+          setError("잠시 후 다시 보내 주세요.");
+          return;
+        }
         if (!payeeReady(profile)) {
           setError("이름, 주민등록번호, 신분증, 본인 계좌, 동의를 모두 넣어 주세요.");
           return;
@@ -177,7 +181,7 @@ export function PayeeForm({ payout }: { payout: Payout }) {
         원천징수 신고와 이체를 위해 성명, 주민등록번호, 신분증, 계좌 정보를 수집하는 데 동의합니다.
       </label>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      <Button type="submit" className="w-full">
+      <Button type="submit" className="w-full" disabled={!ready}>
         자료 보내기
       </Button>
       {saved ? (

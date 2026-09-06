@@ -26,7 +26,7 @@ export default function CollectPage() {
           이체용 인적정보와 링크 자료를 모아 둡니다. 주민등록번호·신분증은 이 기기에만 있습니다.
         </p>
       </div>
-      {!ready ? (
+      {payouts.length === 0 && !ready ? (
         <p className="text-sm text-muted-foreground">불러오는 중…</p>
       ) : (
         <>

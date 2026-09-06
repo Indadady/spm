@@ -11,8 +11,10 @@ export default function PublicPayeePage() {
   const payout = usePayout(id);
   const { ready } = useStore();
 
-  if (!ready) return <p className="text-sm text-muted-foreground">불러오는 중…</p>;
   if (!payout || payout.side !== "out") {
+    if (!ready) {
+      return <p className="text-sm text-muted-foreground">불러오는 중…</p>;
+    }
     return (
       <div className="space-y-2">
         <h1 className="text-xl font-bold">링크를 확인하세요</h1>
