@@ -36,6 +36,12 @@ export function maskRrn(rrn: string) {
   return `${digits.slice(0, 6)}-${digits[6]}${"*".repeat(Math.max(0, digits.length - 7))}`;
 }
 
+export function formatPayDate(iso: string) {
+  const [y, m, d] = iso.split("-");
+  if (!y || !m || !d) return iso;
+  return `${y.slice(2)}.${m}.${d}`;
+}
+
 export function todaySeoulIso() {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",

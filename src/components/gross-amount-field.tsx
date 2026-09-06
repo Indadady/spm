@@ -31,7 +31,7 @@ export function GrossAmountField({
 
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id}>원천징수 이전 금액</Label>
+      <Label htmlFor={id}>세전 금액</Label>
       <div className="relative">
         <Input
           id={id}
@@ -52,9 +52,8 @@ export function GrossAmountField({
         </span>
       </div>
       <p className="text-xs leading-relaxed text-muted-foreground">
-        발주처·견적 금액입니다. 원천 {formatWon(tax.withholding)}을 빼면 실지급{" "}
+        원천 {formatWon(tax.withholding)} · 이체{" "}
         <span className="font-semibold text-foreground">{formatWon(tax.net)}</span>
-        입니다.
       </p>
     </div>
   );

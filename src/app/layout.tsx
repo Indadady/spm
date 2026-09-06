@@ -11,9 +11,8 @@ const noto = Noto_Sans_KR({
 });
 
 export const metadata: Metadata = {
-  title: "SPM 스마트파트너쉽관리",
-  description:
-    "투어메이커 법인 지출 자료 수집과 사업소득 3.3% 원천 후 이체를 관리합니다.",
+  title: "SPM 지급 상대",
+  description: "투어메이커 지급 상대 정보와 사업소득 3.3% 원천 자료를 관리합니다.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

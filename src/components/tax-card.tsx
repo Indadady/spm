@@ -1,34 +1,33 @@
 "use client";
 
+import { CopyButton } from "@/components/copy-button";
 import { GrossAmountField } from "@/components/gross-amount-field";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatWon } from "@/lib/format";
 import { useStore } from "@/lib/store";
-import { calcTax } from "@/lib/tax";
-import type { Payout } from "@/lib/types";
+import { calcTax, taxMemoFor } from "@/lib/tax";
+import type { PayeeProfile, Payout } from "@/lib/types";
 
-export function TaxCard({ payout }: { payout: Payout }) {
+export function TaxCard({
+  payout,
+  payee,
+}: {
+  payout: Payout;
+  payee?: PayeeProfile;
+}) {
   const { updatePayout } = useStore();
   const tax = calcTax({
     method: payout.taxMethod,
     gross: payout.gross,
     days: payout.days,
   });
-  const rows = [
-    ["원천징수 이전", tax.gross],
-    ["필요경비·공제", tax.expense],
-    ["과세표준", tax.taxable],
-    ["소득세", tax.incomeTax],
-    ["지방소득세", tax.localTax],
-    ["원천징수 합계", tax.withholding],
-  ] as const;
+  const memo = taxMemoFor(payout, payee);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{tax.methodLabel}</CardTitle>
+        <CardTitle>세무 전달 자료</CardTitle>
         <p className="text-xs text-muted-foreground">
-          {payout.side === "in" ? "입금 예정 실수령액" : "원천징수 후 이체액"}
+          세무 담당자에게 그대로 보내면 됩니다. 계좌는 상대가 제출한 뒤 채워집니다.
         </p>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -38,23 +37,16 @@ export function TaxCard({ payout }: { payout: Payout }) {
           days={payout.days}
           onChange={(gross) => updatePayout(payout.id, { gross })}
         />
-        <div className="rounded-xl bg-[color:var(--navy)] px-4 py-3 text-white">
-          <p className="text-xs text-white/70">실지급 / 실수령</p>
-          <p className="text-2xl font-bold tracking-tight">{formatWon(tax.net)}</p>
+        <pre className="whitespace-pre-wrap break-keep rounded-xl bg-[color:var(--navy)] px-4 py-3 text-sm leading-relaxed text-white">
+          {memo}
+        </pre>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">
+            소득세 {tax.incomeTax.toLocaleString("ko-KR")}원 · 지방소득세{" "}
+            {tax.localTax.toLocaleString("ko-KR")}원
+          </p>
+          <CopyButton text={memo} label="세무 자료 복사" />
         </div>
-        <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
-          {rows.map(([label, value]) => (
-            <div key={label} className="contents">
-              <dt className="text-muted-foreground">{label}</dt>
-              <dd className="text-right font-medium tabular-nums">{formatWon(value)}</dd>
-            </div>
-          ))}
-        </dl>
-        <ul className="space-y-1 text-xs leading-relaxed text-muted-foreground">
-          {tax.notes.map((n) => (
-            <li key={n}>· {n}</li>
-          ))}
-        </ul>
       </CardContent>
     </Card>
   );

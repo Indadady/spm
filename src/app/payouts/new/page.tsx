@@ -4,98 +4,56 @@ import { GrossAmountField } from "@/components/gross-amount-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { PAYOUT_TYPES } from "@/lib/payout-types";
 import { useStore } from "@/lib/store";
 import { todaySeoulIso } from "@/lib/format";
-import type { Payout, PayoutTypeId, TaxMethod } from "@/lib/types";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import type { Payout } from "@/lib/types";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
-const taxChoices: { id: TaxMethod; label: string }[] = [
-  { id: "business-3-3", label: "사업소득 3.3%" },
-  { id: "tax-invoice", label: "세금계산서 (원천 없음)" },
-];
-
-function NewPayoutForm() {
+export default function NewPayoutPage() {
   const router = useRouter();
-  const params = useSearchParams();
   const { addPayout } = useStore();
-  const preset = (params.get("type") as PayoutTypeId | null) ?? "lecture";
-  const [typeId, setTypeId] = useState<PayoutTypeId>(
-    PAYOUT_TYPES.some((t) => t.id === preset) ? preset : "lecture"
-  );
-  const type = useMemo(() => PAYOUT_TYPES.find((x) => x.id === typeId)!, [typeId]);
-  const [taxMethod, setTaxMethod] = useState<TaxMethod>(type.taxDefault);
-  const [title, setTitle] = useState("");
   const [partner, setPartner] = useState("");
   const [eventName, setEventName] = useState("");
-  const [clientName, setClientName] = useState("");
   const [gross, setGross] = useState(0);
   const [due, setDue] = useState(todaySeoulIso());
-  const [memo, setMemo] = useState("");
-
-  function onType(next: PayoutTypeId) {
-    setTypeId(next);
-    const t = PAYOUT_TYPES.find((x) => x.id === next)!;
-    setTaxMethod(t.taxDefault);
-  }
 
   return (
-    <form
-      className="space-y-4"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!gross) return;
-        const id = `pmt-${Date.now()}`;
-        const payout: Payout = {
-          id,
-          typeId,
-          side: "out",
-          title: title.trim() || `${type.name} · ${partner.trim() || "미정"}`,
-          partnerName: partner.trim() || "미정",
-          partnerRole: type.payee,
-          eventName: eventName.trim() || undefined,
-          clientName: clientName.trim() || undefined,
-          needsContract: false,
-          gross,
-          taxMethod,
-          dueDate: due,
-          status: "collecting",
-          memo: memo.trim() || undefined,
-          docs: [],
-          evidence: type.evidence,
-          survey: [],
-        };
-        addPayout(payout);
-        router.push(`/payouts/${id}`);
-      }}
-    >
-      <div className="space-y-1.5">
-        <Label>지출 유형</Label>
-        <select
-          className="h-9 w-full rounded-lg border border-input bg-card px-2.5 text-sm"
-          value={typeId}
-          onChange={(e) => onType(e.target.value as PayoutTypeId)}
-        >
-          {PAYOUT_TYPES.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-        <p className="text-xs text-muted-foreground">{type.taxHint}</p>
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="title">건 제목</Label>
-        <Input
-          id="title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="예: 태백해설사 심화교육 강사료 · 김련"
-        />
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+    <div className="space-y-4">
+      <h1 className="text-2xl font-bold">새 지급</h1>
+      <p className="text-sm text-muted-foreground">
+        세전 금액을 넣으면 3.3% 원천과 이체액이 바로 나옵니다. 받는 사람 화면에는 금액이 보이지
+        않습니다.
+      </p>
+      <form
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!gross) return;
+          const name = partner.trim();
+          const event = eventName.trim();
+          const id = `pmt-${Date.now()}`;
+          const payout: Payout = {
+            id,
+            typeId: "lecture",
+            side: "out",
+            title: event ? `${event} · ${name}` : name,
+            partnerName: name,
+            partnerRole: "지급 상대",
+            eventName: event || undefined,
+            needsContract: false,
+            gross,
+            taxMethod: "business-3-3",
+            dueDate: due,
+            status: "collecting",
+            docs: [],
+            evidence: [],
+            survey: [],
+          };
+          addPayout(payout);
+          router.push(`/payouts/${id}`);
+        }}
+      >
         <div className="space-y-1.5">
           <Label htmlFor="partner">받는 사람</Label>
           <Input
@@ -110,64 +68,15 @@ function NewPayoutForm() {
           <Label htmlFor="event">행사명 (있으면)</Label>
           <Input id="event" value={eventName} onChange={(e) => setEventName(e.target.value)} />
         </div>
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="client">발주처 (있으면)</Label>
-        <Input
-          id="client"
-          value={clientName}
-          onChange={(e) => setClientName(e.target.value)}
-          placeholder="예: 태백고생대자연사박물관"
-        />
-      </div>
-      <div className="space-y-1.5">
-        <Label>원천 방식</Label>
-        <select
-          className="h-9 w-full rounded-lg border border-input bg-card px-2.5 text-sm"
-          value={taxMethod}
-          onChange={(e) => setTaxMethod(e.target.value as TaxMethod)}
-        >
-          {taxChoices.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.label}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <GrossAmountField
-          value={gross}
-          onChange={setGross}
-          taxMethod={taxMethod}
-          required
-        />
+        <GrossAmountField value={gross} onChange={setGross} taxMethod="business-3-3" required />
         <div className="space-y-1.5">
-          <Label htmlFor="due">지급 예정일</Label>
+          <Label htmlFor="due">지급일</Label>
           <Input id="due" type="date" value={due} onChange={(e) => setDue(e.target.value)} />
         </div>
-      </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="memo">메모</Label>
-        <Textarea id="memo" value={memo} onChange={(e) => setMemo(e.target.value)} />
-      </div>
-      <Button type="submit" className="w-full sm:w-auto">
-        등록하고 자료 링크 만들기
-      </Button>
-    </form>
-  );
-}
-
-export default function NewPayoutPage() {
-  return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold">새 지출</h1>
-      <p className="text-sm text-muted-foreground">
-        원천징수 이전 금액을 넣으면 원천과 실지급이 바로 나옵니다. 받는 사람에게는 금액이 보이지
-        않습니다. 이 브라우저에 저장됩니다.
-      </p>
-      <Suspense>
-        <NewPayoutForm />
-      </Suspense>
+        <Button type="submit" className="w-full sm:w-auto">
+          등록하고 자료 링크 만들기
+        </Button>
+      </form>
     </div>
   );
 }

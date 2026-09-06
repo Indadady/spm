@@ -1,15 +1,14 @@
 "use client";
 
 import { buttonVariants } from "@/components/ui/button";
-import { FolderOpen, Landmark, LayoutGrid, Plus } from "lucide-react";
+import { FileText, LayoutGrid, Plus } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const nav = [
-  { href: "/", label: "현황", icon: LayoutGrid },
-  { href: "/ledger", label: "원장", icon: Landmark },
-  { href: "/collect", label: "자료함", icon: FolderOpen },
+  { href: "/", label: "지급", icon: LayoutGrid },
+  { href: "/ledger", label: "세무 자료", icon: FileText },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -17,22 +16,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const bare = path.startsWith("/p/");
 
   if (bare) {
-    return (
-      <div className="min-h-full bg-[#f4f7f6] print:bg-white">
-        {children}
-      </div>
-    );
+    return <div className="min-h-full bg-[#f4f7f6] print:bg-white">{children}</div>;
   }
 
   return (
     <div className="flex min-h-full flex-col bg-background">
       <header className="sticky top-0 z-40 border-b border-border/80 bg-[color:var(--navy)] text-white">
-        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-3 px-4">
+        <div className="mx-auto flex h-14 max-w-3xl items-center justify-between gap-3 px-4">
           <Link href="/" className="flex min-w-0 items-baseline gap-2">
             <span className="text-lg font-bold tracking-tight">SPM</span>
-            <span className="truncate text-xs font-medium text-white/70">
-              스마트파트너쉽관리
-            </span>
+            <span className="truncate text-xs font-medium text-white/70">지급 상대</span>
           </Link>
           <div className="flex items-center gap-1">
             <nav className="hidden items-center gap-1 sm:flex">
@@ -57,16 +50,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               )}
             >
               <Plus className="size-4" />
-              새 지출
+              새 지급
             </Link>
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-5 pb-24 sm:pb-8">
-        {children}
-      </main>
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-5 pb-24 sm:pb-8">{children}</main>
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-card/95 backdrop-blur sm:hidden">
-        <div className="grid grid-cols-4">
+        <div className="grid grid-cols-3">
           {nav.map((item) => (
             <Link
               key={item.href}
@@ -82,13 +73,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             className="flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium text-[color:var(--navy)]"
           >
             <Plus className="size-4" />
-            새 지출
+            새 지급
           </Link>
         </div>
       </nav>
-      <footer className="hidden border-t py-4 text-center text-xs text-muted-foreground sm:block">
-        (주)투어메이커 · 법인 지출은 사업소득 3.3% 원천 후 이체합니다.
-      </footer>
     </div>
   );
 }

@@ -1,4 +1,5 @@
-import type { TaxMethod } from "./types";
+import type { PayeeProfile, Payout, TaxMethod } from "./types";
+import { formatPayDate } from "./format";
 
 export type TaxResult = {
   method: TaxMethod;
@@ -15,6 +16,14 @@ export type TaxResult = {
 
 function floorWon(n: number) {
   return Math.floor(Math.max(0, n));
+}
+
+function floor10(n: number) {
+  return Math.floor(Math.max(0, n) / 10) * 10;
+}
+
+export function formatWonPlain(n: number) {
+  return `${Math.round(n).toLocaleString("ko-KR")}원`;
 }
 
 export function calcTax(input: {
@@ -35,16 +44,13 @@ export function calcTax(input: {
       localTax: 0,
       withholding: 0,
       net: gross,
-      notes: [
-        "사업자등록 거래입니다. 공급가액에 부가세 10%를 별도 수취·공제합니다.",
-        "원천징수는 하지 않고, 세금계산서와 이체증을 원장에 붙입니다.",
-      ],
+      notes: ["사업자등록 거래는 원천징수 없이 세금계산서로 처리합니다."],
     };
   }
 
   if (input.method === "business-3-3") {
-    const incomeTax = floorWon(gross * 0.03);
-    const localTax = floorWon(incomeTax * 0.1);
+    const incomeTax = floor10(gross * 0.03);
+    const localTax = floor10(incomeTax * 0.1);
     const withholding = incomeTax + localTax;
     return {
       method: input.method,
@@ -56,20 +62,14 @@ export function calcTax(input: {
       localTax,
       withholding,
       net: gross - withholding,
-      notes: [
-        "법인에서 개인에게 나가는 지출은 사업소득으로 보고 3.3%를 원천합니다.",
-        "소득세 3% + 지방소득세 0.3%를 뺀 금액을 본인 명의 계좌로 이체합니다.",
-      ],
+      notes: ["소득세 3%와 지방소득세 0.3%를 적용한 뒤 10원 미만을 버립니다."],
     };
   }
 
   if (input.method === "other-income-60") {
     const expense = floorWon(gross * 0.6);
     const taxable = gross - expense;
-    const notes = [
-      "강연료·자문료 등 기타소득(인적용역)은 필요경비 60%를 뺀 금액에 20%를 원천징수합니다.",
-      "지방소득세는 소득세의 10%입니다. 합치면 지급액의 8.8%입니다.",
-    ];
+    const notes = ["기타소득은 필요경비 60%를 뺀 금액에 원천합니다."];
     if (taxable <= 50_000) {
       return {
         method: input.method,
@@ -81,10 +81,7 @@ export function calcTax(input: {
         localTax: 0,
         withholding: 0,
         net: gross,
-        notes: [
-          ...notes,
-          "기타소득금액이 5만 원 이하이면 과세최저한으로 원천징수하지 않습니다.",
-        ],
+        notes,
       };
     }
     const incomeTax = floorWon(taxable * 0.2);
@@ -113,6 +110,39 @@ export function calcTax(input: {
     localTax: 0,
     withholding: 0,
     net: gross,
-    notes: ["세액을 회계 프로그램에서 계산한 뒤, 이 건의 메모에 적어 두세요."],
+    notes: [],
   };
+}
+
+export function formatTaxMemo(input: {
+  gross: number;
+  withholding: number;
+  net: number;
+  bank?: string;
+  account?: string;
+  holder?: string;
+  payDate: string;
+}) {
+  const payLine = [input.bank, input.account, input.holder].filter(Boolean).join(" ");
+  const last = payLine
+    ? `최종 입금 예정 금액: ${formatWonPlain(input.net)}        ${payLine} 지급일 ${input.payDate}`
+    : `최종 입금 예정 금액: ${formatWonPlain(input.net)}        지급일 ${input.payDate}`;
+  return [
+    `세전 ${formatWonPlain(input.gross)}`,
+    `사업소득세 원천징수(3.3%) 적용: ${formatWonPlain(input.withholding)} (1원 단위 절사)`,
+    last,
+  ].join("\n");
+}
+
+export function taxMemoFor(payout: Payout, payee?: PayeeProfile) {
+  const tax = calcTax({ method: payout.taxMethod, gross: payout.gross, days: payout.days });
+  return formatTaxMemo({
+    gross: tax.gross,
+    withholding: tax.withholding,
+    net: tax.net,
+    bank: payee?.bank,
+    account: payee?.account,
+    holder: payee?.holder,
+    payDate: formatPayDate(payout.paidDate || payout.dueDate),
+  });
 }
