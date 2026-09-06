@@ -62,8 +62,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setUserPayouts(readJson<Payout[]>(USER_KEY, []));
-    setState(mergeState(readJson<Partial<CaseState>>(STATE_KEY, emptyState)));
+    const storedPayouts = readJson<Payout[]>(USER_KEY, []);
+    const storedState = mergeState(readJson<Partial<CaseState>>(STATE_KEY, emptyState));
+    setUserPayouts((current) => (current.length ? current : storedPayouts));
+    setState((current) => ({
+      ...storedState,
+      ...current,
+      payee: { ...storedState.payee, ...current.payee },
+      evidenceDone: { ...storedState.evidenceDone, ...current.evidenceDone },
+      survey: { ...storedState.survey, ...current.survey },
+      lodging: { ...storedState.lodging, ...current.lodging },
+      contracts: { ...storedState.contracts, ...current.contracts },
+    }));
     setReady(true);
   }, []);
 

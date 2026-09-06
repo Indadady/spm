@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatWon } from "@/lib/format";
 import { submitPayee } from "@/lib/payee-inbox";
-import { payeeReady } from "@/lib/payout-types";
+import { payeeMissing } from "@/lib/payout-types";
 import { useStore } from "@/lib/store";
 import { calcTax } from "@/lib/tax";
 import type { Payout } from "@/lib/types";
@@ -68,8 +68,9 @@ export function PayeeForm({ payout }: { payout: Payout }) {
           privacyAgreed: agree,
           submittedAt: new Date().toISOString(),
         };
-        if (!payeeReady(profile)) {
-          setError("이름, 주민등록번호, 신분증, 본인 계좌, 동의를 모두 넣어 주세요.");
+        const miss = payeeMissing(profile);
+        if (miss.length) {
+          setError(`${miss.join(", ")}을(를) 넣어 주세요.`);
           return;
         }
         setSending(true);

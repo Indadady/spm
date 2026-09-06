@@ -124,22 +124,27 @@ export function typeById(id: PayoutTypeId) {
   return found;
 }
 
-export function payeeReady(p?: {
+export function payeeMissing(p?: {
   name?: string;
   rrn?: string;
   bank?: string;
   account?: string;
   holder?: string;
   idImageDataUrl?: string;
+  idImageUrl?: string;
   privacyAgreed?: boolean;
 }) {
-  return Boolean(
-    p?.name?.trim() &&
-      p?.rrn?.trim() &&
-      p?.bank?.trim() &&
-      p?.account?.trim() &&
-      p?.holder?.trim() &&
-      p?.idImageDataUrl &&
-      p?.privacyAgreed
-  );
+  const miss: string[] = [];
+  if (!p?.name?.trim()) miss.push("이름");
+  if (!p?.rrn?.trim()) miss.push("주민등록번호");
+  if (!p?.idImageDataUrl && !p?.idImageUrl) miss.push("신분증 사진");
+  if (!p?.bank?.trim()) miss.push("은행");
+  if (!p?.account?.trim()) miss.push("계좌번호");
+  if (!p?.holder?.trim()) miss.push("예금주");
+  if (!p?.privacyAgreed) miss.push("개인정보 동의");
+  return miss;
+}
+
+export function payeeReady(p?: Parameters<typeof payeeMissing>[0]) {
+  return payeeMissing(p).length === 0;
 }
