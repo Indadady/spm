@@ -62,6 +62,17 @@ export function PayeeCard({
             <dd>{payee.holder}</dd>
           </dl>
         )}
+        {payee?.signatureDataUrl ? (
+          <div>
+            <p className="mb-1 text-xs text-muted-foreground">서명</p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={payee.signatureDataUrl}
+              alt="서명"
+              className="max-h-28 w-full rounded-xl border bg-white object-contain"
+            />
+          </div>
+        ) : null}
         {idSrc ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img

@@ -18,14 +18,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (bare) {
     return (
-      <div className="flex min-h-full flex-col bg-background">
-        <header className="border-b border-white/10 bg-[color:var(--navy)] text-white">
-          <div className="mx-auto max-w-lg px-4 py-3">
-            <p className="text-sm font-bold">주식회사 투어메이커</p>
-            <p className="text-xs text-white/70">지출 자료 수집</p>
-          </div>
-        </header>
-        <main className="mx-auto w-full max-w-lg flex-1 px-4 py-5">{children}</main>
+      <div className="min-h-full bg-[#f4f7f6] print:bg-white">
+        {children}
       </div>
     );
   }

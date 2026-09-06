@@ -126,7 +126,9 @@ export function typeById(id: PayoutTypeId) {
 
 export function payeeMissing(p?: {
   name?: string;
+  phone?: string;
   rrn?: string;
+  signatureDataUrl?: string;
   bank?: string;
   account?: string;
   holder?: string;
@@ -135,12 +137,14 @@ export function payeeMissing(p?: {
   privacyAgreed?: boolean;
 }) {
   const miss: string[] = [];
-  if (!p?.name?.trim()) miss.push("이름");
+  if (!p?.name?.trim()) miss.push("성명");
+  if (!p?.phone?.trim()) miss.push("연락처");
   if (!p?.rrn?.trim()) miss.push("주민등록번호");
   if (!p?.idImageDataUrl && !p?.idImageUrl) miss.push("신분증 사진");
   if (!p?.bank?.trim()) miss.push("은행");
   if (!p?.account?.trim()) miss.push("계좌번호");
   if (!p?.holder?.trim()) miss.push("예금주");
+  if (!p?.signatureDataUrl) miss.push("서명");
   if (!p?.privacyAgreed) miss.push("개인정보 동의");
   return miss;
 }

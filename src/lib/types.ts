@@ -114,6 +114,7 @@ export type PayeeProfile = {
   idImageDataUrl?: string;
   idImageUrl?: string;
   idFileName?: string;
+  signatureDataUrl?: string;
   privacyAgreed: boolean;
   submittedAt?: string;
   source?: "firebase" | "local";

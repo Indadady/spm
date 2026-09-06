@@ -37,6 +37,7 @@ export function profileFromDoc(
     idImageDataUrl: data.idImageDataUrl ? String(data.idImageDataUrl) : undefined,
     idImageUrl: data.idImageUrl ? String(data.idImageUrl) : undefined,
     idFileName: data.idFileName ? String(data.idFileName) : undefined,
+    signatureDataUrl: data.signatureDataUrl ? String(data.signatureDataUrl) : undefined,
     privacyAgreed: Boolean(data.privacyAgreed),
     submittedAt: String(data.createdAt ?? data.submittedAt ?? ""),
     source,
@@ -78,6 +79,11 @@ export async function submitPayee(payout: Payout, profile: PayeeProfile) {
     privacyAgreed: profile.privacyAgreed,
     idFileName: profile.idFileName ?? "",
     idImageUrl: idImageUrl ?? "",
+    signatureDataUrl: profile.signatureDataUrl ?? "",
+    partnerPhone: profile.phone ?? "",
+    taxId: profile.rrn,
+    eventCode: payout.documentNo ?? payout.id,
+    status: "completed",
     ...(idImageDataUrl ? { idImageDataUrl } : {}),
   };
 
