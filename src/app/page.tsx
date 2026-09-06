@@ -5,6 +5,7 @@ import { TypeBadge } from "@/components/type-badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatWon } from "@/lib/format";
+import { absoluteUrl } from "@/lib/paths";
 import { PAYOUT_TYPES, payeeReady } from "@/lib/payout-types";
 import { useStore } from "@/lib/store";
 import { usePayeeInbox } from "@/lib/use-payee-inbox";
@@ -105,7 +106,7 @@ export default function HomePage() {
                 지출 건 열기
               </Link>
               {origin ? (
-                <CopyLink url={`${origin}/p/${nextPay.id}`} label="자료 받는 링크 복사" />
+                <CopyLink url={absoluteUrl(`/p/${nextPay.id}`)} label="자료 받는 링크 복사" />
               ) : null}
             </div>
           </CardContent>

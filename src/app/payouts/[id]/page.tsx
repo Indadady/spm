@@ -9,6 +9,7 @@ import { TypeBadge } from "@/components/type-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/format";
+import { absoluteUrl } from "@/lib/paths";
 import { typeById } from "@/lib/payout-types";
 import { usePayeeInbox } from "@/lib/use-payee-inbox";
 import { usePayout, useStore } from "@/lib/store";
@@ -43,7 +44,7 @@ export default function PayoutPage() {
   }
 
   const type = typeById(payout.typeId);
-  const collectUrl = origin ? `${origin}/p/${payout.id}` : "";
+  const collectUrl = origin ? absoluteUrl(`/p/${payout.id}`) : "";
 
   return (
     <div className="space-y-5">

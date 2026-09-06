@@ -3,6 +3,7 @@
 import { CopyLink } from "@/components/copy-link";
 import { PayeeCard } from "@/components/payee-card";
 import { PayoutSubnav } from "@/components/payout-subnav";
+import { absoluteUrl } from "@/lib/paths";
 import { usePayout, useStore } from "@/lib/store";
 import { usePayeeInbox } from "@/lib/use-payee-inbox";
 import Link from "next/link";
@@ -25,7 +26,7 @@ export default function PayeeAdminPage() {
     );
   }
 
-  const url = origin ? `${origin}/p/${payout.id}` : "";
+  const url = origin ? absoluteUrl(`/p/${payout.id}`) : "";
 
   return (
     <div className="space-y-5">
