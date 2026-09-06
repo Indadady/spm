@@ -10,16 +10,36 @@ function dataUrlToBytes(dataUrl: string) {
   return comma >= 0 ? Math.ceil(((dataUrl.length - comma - 1) * 3) / 4) : dataUrl.length;
 }
 
-async function uploadIdImage(payoutId: string, dataUrl: string, fileName?: string) {
+function withTimeout<T>(p: Promise<T>, ms: number, label: string) {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(label)), ms);
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      }
+    );
+  });
+}
+
+async function uploadDataUrl(payoutId: string, dataUrl: string, fileName: string) {
   const { storage } = getFirebase();
   if (!storage) return undefined;
-  const path = `artifacts/${SURVEY_APP_ID}/public/spm/${payoutId}/${Date.now()}.jpg`;
+  const path = `artifacts/${SURVEY_APP_ID}/public/spm/${payoutId}/${Date.now()}-${fileName}`;
   const fileRef = ref(storage, path);
-  await uploadString(fileRef, dataUrl, "data_url", {
-    contentType: "image/jpeg",
-    customMetadata: { originalName: fileName ?? "id.jpg" },
-  });
-  return getDownloadURL(fileRef);
+  await withTimeout(
+    uploadString(fileRef, dataUrl, "data_url", {
+      contentType: "image/jpeg",
+      customMetadata: { originalName: fileName },
+    }),
+    10_000,
+    "upload"
+  );
+  return withTimeout(getDownloadURL(fileRef), 5_000, "url");
 }
 
 export function profileFromDoc(
@@ -46,18 +66,23 @@ export function profileFromDoc(
 }
 
 export async function submitPayee(payout: Payout, profile: PayeeProfile) {
-  await ensureAnonAuth();
+  await withTimeout(ensureAnonAuth(), 8_000, "auth");
   let idImageUrl = profile.idImageUrl;
-  let idImageDataUrl = profile.idImageDataUrl;
+  let signatureDataUrl = profile.signatureDataUrl ?? "";
 
   if (profile.idImageDataUrl) {
     try {
-      idImageUrl = await uploadIdImage(payout.id, profile.idImageDataUrl, profile.idFileName);
-      idImageDataUrl = undefined;
+      idImageUrl = await uploadDataUrl(payout.id, profile.idImageDataUrl, profile.idFileName ?? "id.jpg");
     } catch {
-      if (dataUrlToBytes(profile.idImageDataUrl) > 700_000) {
-        idImageDataUrl = undefined;
-      }
+      idImageUrl = idImageUrl ?? "";
+    }
+  }
+
+  if (signatureDataUrl && dataUrlToBytes(signatureDataUrl) > 180_000) {
+    try {
+      signatureDataUrl = (await uploadDataUrl(payout.id, signatureDataUrl, "sign.jpg")) ?? "";
+    } catch {
+      signatureDataUrl = "";
     }
   }
 
@@ -79,15 +104,14 @@ export async function submitPayee(payout: Payout, profile: PayeeProfile) {
     privacyAgreed: profile.privacyAgreed,
     idFileName: profile.idFileName ?? "",
     idImageUrl: idImageUrl ?? "",
-    signatureDataUrl: profile.signatureDataUrl ?? "",
+    signatureDataUrl,
     partnerPhone: profile.phone ?? "",
     taxId: profile.rrn,
     eventCode: payout.documentNo ?? payout.id,
     status: "completed",
-    ...(idImageDataUrl ? { idImageDataUrl } : {}),
   };
 
-  const doc = await addDoc(payeeResponsesCol(payout.id), payload);
+  const doc = await withTimeout(addDoc(payeeResponsesCol(payout.id), payload), 8_000, "save");
   return { remoteId: doc.id, idImageUrl };
 }
 

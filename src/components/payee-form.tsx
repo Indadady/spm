@@ -87,13 +87,15 @@ export function PayeeForm({ payout }: { payout: Payout }) {
         setError("");
         savePayee(payout.id, profile);
         try {
-          await submitPayee(payout, profile);
-          setDone(true);
+          await Promise.race([
+            submitPayee(payout, profile),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 15_000)),
+          ]);
         } catch {
-          setDone(true);
-        } finally {
-          setSending(false);
+          /* 이 기기에는 이미 저장됨. 자료함 연결이 느려도 제출은 끝냅니다. */
         }
+        setSending(false);
+        setDone(true);
       }}
     >
       <div className="space-y-1.5">

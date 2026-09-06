@@ -11,8 +11,14 @@ const noto = Noto_Sans_KR({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://indadady.github.io/spm"),
   title: "SPM 지급 상대",
   description: "투어메이커 지급 상대 정보와 사업소득 3.3% 원천 자료를 관리합니다.",
+  openGraph: {
+    siteName: "투어메이커",
+    locale: "ko_KR",
+    type: "website",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
