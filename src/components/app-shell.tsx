@@ -1,6 +1,7 @@
 "use client";
 
 import { buttonVariants } from "@/components/ui/button";
+import { COMPANY, COMPANY_LOGO } from "@/lib/company";
 import { FileText, LayoutGrid, Plus } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -23,9 +24,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-full flex-col bg-background">
       <header className="sticky top-0 z-40 border-b border-border/80 bg-[color:var(--navy)] text-white">
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between gap-3 px-4">
-          <Link href="/" className="flex min-w-0 items-baseline gap-2">
-            <span className="text-lg font-bold tracking-tight">SPM</span>
-            <span className="truncate text-xs font-medium text-white/70">지급 상대</span>
+          <Link href="/" className="flex min-w-0 items-center gap-2.5">
+            <span className="flex h-8 shrink-0 items-center rounded-md bg-white px-1.5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={COMPANY_LOGO} alt={COMPANY.name} className="h-6 w-auto" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[10px] font-semibold tracking-wider text-white/60">SPM</span>
+              <span className="block truncate text-sm font-bold leading-tight">스마트파트너 관리</span>
+            </span>
           </Link>
           <div className="flex items-center gap-1">
             <nav className="hidden items-center gap-1 sm:flex">

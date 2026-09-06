@@ -230,7 +230,7 @@ export const SEED_PAYOUTS: Payout[] = [
     side: "out",
     title: "자료 입력 확인용 · 테스트",
     partnerName: "테스트",
-    partnerRole: "지급 상대",
+    partnerRole: "스마트파트너",
     eventName: "자료 입력 확인용",
     needsContract: false,
     gross: 2_743_000,

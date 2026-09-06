@@ -39,7 +39,7 @@ export default function NewPayoutPage() {
             side: "out",
             title: event ? `${event} · ${name}` : name,
             partnerName: name,
-            partnerRole: "지급 상대",
+            partnerRole: "스마트파트너",
             eventName: event || undefined,
             needsContract: false,
             gross,

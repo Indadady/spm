@@ -21,7 +21,7 @@ export default function HomePage() {
   return (
     <div className="space-y-5">
       <section>
-        <h1 className="text-2xl font-bold tracking-tight">지급 상대</h1>
+        <h1 className="text-2xl font-bold tracking-tight">스마트파트너 관리</h1>
         <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
           링크를 보내 계좌·신분증을 받고, 3.3%를 뺀 뒤 이체합니다.
         </p>
