@@ -23,7 +23,8 @@ export default function CollectPage() {
       <div>
         <h1 className="text-2xl font-bold">자료함</h1>
         <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-          이체용 인적정보와 링크 자료를 모아 둡니다. 주민등록번호·신분증은 이 기기에만 있습니다.
+          상대가 제출한 이체 자료는 만족도 설문과 같은 파이어베이스 자료함에 모입니다. 각 지출 건의
+          받은 자료에서 확인합니다.
         </p>
       </div>
       {payouts.length === 0 && !ready ? (
@@ -60,12 +61,7 @@ export default function CollectPage() {
           </section>
 
           <section className="space-y-2">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold">링크</h2>
-              <Link href="/surveys/tm-260903" className="text-xs underline">
-                태백 만족도 응답
-              </Link>
-            </div>
+            <h2 className="text-lg font-bold">링크</h2>
             {links.length === 0 ? (
               <p className="text-sm text-muted-foreground">아직 링크가 없습니다.</p>
             ) : (

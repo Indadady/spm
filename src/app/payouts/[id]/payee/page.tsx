@@ -4,6 +4,7 @@ import { CopyLink } from "@/components/copy-link";
 import { PayeeCard } from "@/components/payee-card";
 import { PayoutSubnav } from "@/components/payout-subnav";
 import { usePayout, useStore } from "@/lib/store";
+import { usePayeeInbox } from "@/lib/use-payee-inbox";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -11,7 +12,8 @@ import { useEffect, useState } from "react";
 export default function PayeeAdminPage() {
   const { id } = useParams<{ id: string }>();
   const payout = usePayout(id);
-  const { ready, payeeOf } = useStore();
+  const { ready } = useStore();
+  const inbox = usePayeeInbox(id);
   const [origin, setOrigin] = useState("");
   useEffect(() => setOrigin(window.location.origin), []);
 
@@ -33,8 +35,8 @@ export default function PayeeAdminPage() {
       <div>
         <h1 className="text-2xl font-bold">받은 자료</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          이체에 필요한 이름, 주민등록번호, 신분증, 본인 계좌만 받습니다. 계약서는 이 건에
-          붙이지 않았습니다.
+          상대가 링크에서 제출하면 만족도 설문과 같은 파이어베이스 자료함에 쌓입니다. 카톡으로 받은
+          파편 정보를 여기로 모읍니다.
         </p>
       </div>
       <PayoutSubnav payout={payout} />
@@ -44,7 +46,12 @@ export default function PayeeAdminPage() {
           받는 화면 열기
         </Link>
       </div>
-      <PayeeCard payout={payout} payee={payeeOf(payout.id)} />
+      <PayeeCard payout={payout} payee={inbox.payee} status={inbox.status} />
+      {inbox.submissions.length > 1 ? (
+        <p className="text-xs text-muted-foreground">
+          같은 링크로 {inbox.submissions.length}번 제출되었습니다. 위는 가장 최근 건입니다.
+        </p>
+      ) : null}
     </div>
   );
 }

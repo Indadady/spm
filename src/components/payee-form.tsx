@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatWon } from "@/lib/format";
+import { submitPayee } from "@/lib/payee-inbox";
 import { payeeReady } from "@/lib/payout-types";
 import { useStore } from "@/lib/store";
 import { calcTax } from "@/lib/tax";
@@ -19,7 +20,7 @@ async function fileToJpeg(file: File): Promise<string> {
       el.onerror = () => reject(new Error("이미지를 읽지 못했습니다."));
       el.src = url;
     });
-    const max = 1280;
+    const max = 1100;
     const scale = Math.min(1, max / img.width);
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(img.width * scale));
@@ -27,14 +28,14 @@ async function fileToJpeg(file: File): Promise<string> {
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("이미지를 줄이지 못했습니다.");
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.82);
+    return canvas.toDataURL("image/jpeg", 0.72);
   } finally {
     URL.revokeObjectURL(url);
   }
 }
 
 export function PayeeForm({ payout }: { payout: Payout }) {
-  const { payeeOf, savePayee, ready } = useStore();
+  const { payeeOf, savePayee } = useStore();
   const existing = payeeOf(payout.id);
   const tax = calcTax({ method: payout.taxMethod, gross: payout.gross });
   const [name, setName] = useState(existing?.name ?? payout.partnerName);
@@ -47,7 +48,8 @@ export function PayeeForm({ payout }: { payout: Payout }) {
   const [idFileName, setIdFileName] = useState(existing?.idFileName ?? "");
   const [agree, setAgree] = useState(existing?.privacyAgreed ?? false);
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState(Boolean(existing?.submittedAt));
+  const [saved, setSaved] = useState<"firebase" | "local" | "">("");
+  const [sending, setSending] = useState(false);
 
   return (
     <form
@@ -66,17 +68,24 @@ export function PayeeForm({ payout }: { payout: Payout }) {
           privacyAgreed: agree,
           submittedAt: new Date().toISOString(),
         };
-        if (!ready) {
-          setError("잠시 후 다시 보내 주세요.");
-          return;
-        }
         if (!payeeReady(profile)) {
           setError("이름, 주민등록번호, 신분증, 본인 계좌, 동의를 모두 넣어 주세요.");
           return;
         }
-        savePayee(payout.id, profile);
+        setSending(true);
         setError("");
-        setSaved(true);
+        savePayee(payout.id, profile);
+        try {
+          await submitPayee(payout, profile);
+          setSaved("firebase");
+        } catch {
+          setSaved("local");
+          setError(
+            "지금 화면에서는 투어메이커 자료함과 바로 연결되지 않았습니다. 카카오톡 대신 이 링크를 배포 주소로 보내 주시면 제출 즉시 사무실에서 보입니다."
+          );
+        } finally {
+          setSending(false);
+        }
       }}
     >
       <div className="rounded-xl bg-accent/70 px-4 py-3 text-sm leading-relaxed">
@@ -86,7 +95,7 @@ export function PayeeForm({ payout }: { payout: Payout }) {
           {formatWon(tax.net)}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          이체와 원천징수 신고에 쓰는 자료입니다. 이 브라우저에만 저장되며 서버로 올라가지 않습니다.
+          제출하면 투어메이커 자료함으로 전달됩니다. 카톡이나 구두로 따로 보내지 않으셔도 됩니다.
         </p>
       </div>
 
@@ -108,12 +117,7 @@ export function PayeeForm({ payout }: { payout: Payout }) {
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="phone">휴대전화 (선택)</Label>
-        <Input
-          id="phone"
-          type="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-        />
+        <Input id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
@@ -181,11 +185,14 @@ export function PayeeForm({ payout }: { payout: Payout }) {
         원천징수 신고와 이체를 위해 성명, 주민등록번호, 신분증, 계좌 정보를 수집하는 데 동의합니다.
       </label>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      <Button type="submit" className="w-full" disabled={!ready}>
-        자료 보내기
+      <Button type="submit" className="w-full" disabled={sending}>
+        {sending ? "보내는 중…" : "제출하기"}
       </Button>
-      {saved ? (
-        <p className="text-sm text-emerald-700">받았습니다. 이 기기 자료함에 저장했습니다.</p>
+      {saved === "firebase" ? (
+        <p className="text-sm text-emerald-700">투어메이커로 전달했습니다. 이체 준비에 쓰입니다.</p>
+      ) : null}
+      {saved === "local" && !error ? (
+        <p className="text-sm text-muted-foreground">이 기기에 임시 저장했습니다.</p>
       ) : null}
     </form>
   );

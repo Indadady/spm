@@ -13,7 +13,6 @@ export type CaseState = {
   lodging: Record<string, Lodging>;
   payee: Record<string, PayeeProfile>;
   contracts: Record<string, Contract>;
-  satisfaction: Record<string, Record<string, string>[]>;
 };
 
 type Store = {
@@ -31,8 +30,6 @@ type Store = {
   savePayee: (id: string, profile: PayeeProfile) => void;
   contractOf: (id: string) => Contract | undefined;
   saveContract: (id: string, contract: Contract) => void;
-  satisfactionOf: (surveyId: string) => Record<string, string>[];
-  addSatisfaction: (surveyId: string, values: Record<string, string>) => void;
 };
 
 const emptyState: CaseState = {
@@ -41,7 +38,6 @@ const emptyState: CaseState = {
   lodging: {},
   payee: {},
   contracts: {},
-  satisfaction: {},
 };
 
 const Ctx = createContext<Store | null>(null);
@@ -133,15 +129,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     contractOf: (id) => state.contracts[id] ?? SEED_PAYOUTS.find((p) => p.id === id)?.contract,
     saveContract: (id, contract) =>
       setState((s) => ({ ...s, contracts: { ...s.contracts, [id]: contract } })),
-    satisfactionOf: (surveyId) => state.satisfaction[surveyId] ?? [],
-    addSatisfaction: (surveyId, values) =>
-      setState((s) => ({
-        ...s,
-        satisfaction: {
-          ...s.satisfaction,
-          [surveyId]: [...(s.satisfaction[surveyId] ?? []), values],
-        },
-      })),
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

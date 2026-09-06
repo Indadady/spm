@@ -33,11 +33,7 @@ export default function SurveyPage() {
       <PayoutSubnav payout={payout} />
       {payout.survey.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          이 건에는 설문이 없습니다. 만족도 조사는{" "}
-          <Link href="/s/tm-260903" className="underline">
-            행사 설문
-          </Link>
-          에서 따로 받습니다.
+          이 건에는 설문이 없습니다. 이체 자료는 상대에게 보낸 링크의 제출 버튼으로 받습니다.
         </p>
       ) : (
         <SurveyForm

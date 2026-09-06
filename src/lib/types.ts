@@ -112,9 +112,12 @@ export type PayeeProfile = {
   account: string;
   holder: string;
   idImageDataUrl?: string;
+  idImageUrl?: string;
   idFileName?: string;
   privacyAgreed: boolean;
   submittedAt?: string;
+  source?: "firebase" | "local";
+  remoteId?: string;
 };
 
 export type Payout = {

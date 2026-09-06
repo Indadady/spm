@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatWon } from "@/lib/format";
 import { PAYOUT_TYPES, payeeReady } from "@/lib/payout-types";
 import { useStore } from "@/lib/store";
+import { usePayeeInbox } from "@/lib/use-payee-inbox";
 import { calcTax } from "@/lib/tax";
 import type { Payout } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -35,7 +36,7 @@ function sums(list: Payout[]) {
 }
 
 export default function HomePage() {
-  const { payouts, ready, payeeOf } = useStore();
+  const { payouts, ready } = useStore();
   const [origin, setOrigin] = useState("");
   useEffect(() => setOrigin(window.location.origin), []);
 
@@ -46,7 +47,8 @@ export default function HomePage() {
   const nextTax = nextPay
     ? calcTax({ method: nextPay.taxMethod, gross: nextPay.gross })
     : null;
-  const nextReady = nextPay ? payeeReady(payeeOf(nextPay.id)) : false;
+  const inbox = usePayeeInbox(nextPay?.id ?? "");
+  const nextReady = payeeReady(inbox.payee);
 
   return (
     <div className="space-y-6">
@@ -59,8 +61,8 @@ export default function HomePage() {
           <br className="hidden sm:block" /> 3.3%를 뺀 뒤 보냅니다.
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          직원 급여는 넣지 않습니다. 강사료·요원비·체험비·용역비는 사업소득으로 보고
-          원천 3.3%를 제외한 금액을 이체합니다. 객실배정·만족도 설문은 이 화면과 묶지 않습니다.
+          직원 급여는 넣지 않습니다. 강사료·요원비·체험비·용역비는 사업소득 3.3%를 뺀 뒤 이체합니다.
+          링크를 보내 받으면, 만족도 설문과 같은 파이어베이스 자료함에서 바로 확인합니다.
         </p>
       </section>
 
@@ -105,12 +107,6 @@ export default function HomePage() {
               {origin ? (
                 <CopyLink url={`${origin}/p/${nextPay.id}`} label="자료 받는 링크 복사" />
               ) : null}
-              <Link
-                href="/s/tm-260903"
-                className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
-              >
-                행사 만족도 설문 (별도)
-              </Link>
             </div>
           </CardContent>
         </Card>

@@ -14,7 +14,7 @@ const nav = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
-  const bare = path.startsWith("/p/") || path.startsWith("/s/");
+  const bare = path.startsWith("/p/");
 
   if (bare) {
     return (

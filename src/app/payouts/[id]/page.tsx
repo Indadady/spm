@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/format";
 import { typeById } from "@/lib/payout-types";
+import { usePayeeInbox } from "@/lib/use-payee-inbox";
 import { usePayout, useStore } from "@/lib/store";
 import { todaySeoulIso } from "@/lib/format";
 import { ExternalLink, FileText } from "lucide-react";
@@ -28,7 +29,8 @@ const statusLabel = {
 export default function PayoutPage() {
   const { id } = useParams<{ id: string }>();
   const payout = usePayout(id);
-  const { setStatus, ready, payeeOf } = useStore();
+  const { setStatus, ready } = useStore();
+  const inbox = usePayeeInbox(id);
   const [origin, setOrigin] = useState("");
   useEffect(() => setOrigin(window.location.origin), []);
 
@@ -86,7 +88,9 @@ export default function PayoutPage() {
 
       <TaxCard payout={payout} />
 
-      {payout.side === "out" ? <PayeeCard payout={payout} payee={payeeOf(payout.id)} /> : null}
+      {payout.side === "out" ? (
+        <PayeeCard payout={payout} payee={inbox.payee} status={inbox.status} />
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
         {payout.side === "out" ? (
