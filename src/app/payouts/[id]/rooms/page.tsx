@@ -1,7 +1,5 @@
 "use client";
 
-import { PayoutSubnav } from "@/components/payout-subnav";
-import { RoomBoard } from "@/components/room-board";
 import { usePayout, useStore } from "@/lib/store";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -21,18 +19,11 @@ export default function RoomsPage() {
       </Link>
       <div>
         <h1 className="text-2xl font-bold">객실배정</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          가이드북과 같이 사람만 실제 명단으로 두고, 호수는 현장에서 받은 값을 직접 적습니다.
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          객실배정은 지출 자료 수집과 거리가 있어 이 건에 묶지 않습니다. 가이드북이나 현장 명단에서
+          따로 관리합니다.
         </p>
       </div>
-      <PayoutSubnav payout={payout} />
-      {payout.lodging ? (
-        <RoomBoard payoutId={payout.id} initial={payout.lodging} />
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          이 건에는 숙소가 없습니다. 새 지급을 등록할 때 객실배정 칸을 켜면 생깁니다.
-        </p>
-      )}
     </div>
   );
 }

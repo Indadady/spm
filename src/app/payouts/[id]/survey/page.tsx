@@ -20,17 +20,27 @@ export default function SurveyPage() {
         ← {payout.title}
       </Link>
       <div>
-        <h1 className="text-2xl font-bold">설문</h1>
+        <h1 className="text-2xl font-bold">참고 설문</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          계좌·사업자 여부·수행 확인을 구글폼처럼 받습니다. 답은 이 기기에만 남습니다.
+          법인 지출 건의 이체 자료는 별도 링크로 받습니다. 이 화면은 참고 수입 사례용입니다.
         </p>
       </div>
       <PayoutSubnav payout={payout} />
-      <SurveyForm
-        payoutId={payout.id}
-        questions={payout.survey}
-        externalFormUrl={payout.externalFormUrl}
-      />
+      {payout.survey.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          이 건에는 설문이 없습니다. 만족도 조사는{" "}
+          <Link href="/s/tm-260903" className="underline">
+            행사 설문
+          </Link>
+          에서 따로 받습니다.
+        </p>
+      ) : (
+        <SurveyForm
+          payoutId={payout.id}
+          questions={payout.survey}
+          externalFormUrl={payout.externalFormUrl}
+        />
+      )}
     </div>
   );
 }

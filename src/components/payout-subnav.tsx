@@ -6,10 +6,15 @@ import Link from "next/link";
 export function PayoutSubnav({ payout }: { payout: Payout }) {
   const items = [
     { href: `/payouts/${payout.id}`, label: "개요" },
-    { href: `/payouts/${payout.id}/contract`, label: "계약" },
-    { href: `/payouts/${payout.id}/survey`, label: "설문" },
-    { href: `/payouts/${payout.id}/rooms`, label: "객실" },
-    { href: `/payouts/${payout.id}/schedule`, label: "일정" },
+    ...(payout.side === "out"
+      ? [{ href: `/payouts/${payout.id}/payee`, label: "받은 자료" }]
+      : []),
+    ...(payout.contract || payout.needsContract
+      ? [{ href: `/payouts/${payout.id}/contract`, label: "계약" }]
+      : []),
+    ...(payout.side === "in" && payout.survey.length > 0
+      ? [{ href: `/payouts/${payout.id}/survey`, label: "참고 설문" }]
+      : []),
   ];
 
   return (

@@ -12,12 +12,12 @@ import { useParams } from "next/navigation";
 export default function ContractPage() {
   const { id } = useParams<{ id: string }>();
   const payout = usePayout(id);
-  const { ready } = useStore();
+  const { ready, contractOf } = useStore();
 
   if (!ready) return <p className="text-sm text-muted-foreground">불러오는 중…</p>;
   if (!payout) return <p>해당 건을 찾을 수 없습니다.</p>;
 
-  const c = payout.contract;
+  const c = contractOf(payout.id) ?? payout.contract;
 
   return (
     <div className="space-y-5">
@@ -29,8 +29,7 @@ export default function ContractPage() {
 
       {!c ? (
         <p className="text-sm leading-relaxed text-muted-foreground">
-          아직 계약 본문이 없습니다. PDF나 싸인오케이 링크를 자료함에 붙이고, 서명 완료본을
-          증빙 체크에 남기면 됩니다.
+          이 건은 투어메이커와 별도 계약을 두지 않았습니다. 이체에 필요한 자료만 받습니다.
         </p>
       ) : (
         <>

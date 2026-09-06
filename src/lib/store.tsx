@@ -2,15 +2,18 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { SEED_PAYOUTS } from "./seed";
-import type { Lodging, Payout, PayoutStatus } from "./types";
+import type { Contract, Lodging, PayeeProfile, Payout, PayoutStatus } from "./types";
 
-const USER_KEY = "spm.userPayouts.v1";
-const STATE_KEY = "spm.caseState.v1";
+const USER_KEY = "spm.userPayouts.v2";
+const STATE_KEY = "spm.caseState.v2";
 
 export type CaseState = {
   evidenceDone: Record<string, string[]>;
   survey: Record<string, Record<string, string>>;
   lodging: Record<string, Lodging>;
+  payee: Record<string, PayeeProfile>;
+  contracts: Record<string, Contract>;
+  satisfaction: Record<string, Record<string, string>[]>;
 };
 
 type Store = {
@@ -24,6 +27,21 @@ type Store = {
   surveyOf: (id: string) => Record<string, string>;
   lodgingOf: (payout: Payout) => Lodging | undefined;
   saveLodging: (id: string, lodging: Lodging) => void;
+  payeeOf: (id: string) => PayeeProfile | undefined;
+  savePayee: (id: string, profile: PayeeProfile) => void;
+  contractOf: (id: string) => Contract | undefined;
+  saveContract: (id: string, contract: Contract) => void;
+  satisfactionOf: (surveyId: string) => Record<string, string>[];
+  addSatisfaction: (surveyId: string, values: Record<string, string>) => void;
+};
+
+const emptyState: CaseState = {
+  evidenceDone: {},
+  survey: {},
+  lodging: {},
+  payee: {},
+  contracts: {},
+  satisfaction: {},
 };
 
 const Ctx = createContext<Store | null>(null);
@@ -38,20 +56,18 @@ function readJson<T>(key: string, fallback: T): T {
   }
 }
 
+function mergeState(raw: Partial<CaseState> | null): CaseState {
+  return { ...emptyState, ...raw };
+}
+
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [userPayouts, setUserPayouts] = useState<Payout[]>([]);
-  const [state, setState] = useState<CaseState>({
-    evidenceDone: {},
-    survey: {},
-    lodging: {},
-  });
+  const [state, setState] = useState<CaseState>(emptyState);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     setUserPayouts(readJson<Payout[]>(USER_KEY, []));
-    setState(
-      readJson<CaseState>(STATE_KEY, { evidenceDone: {}, survey: {}, lodging: {} })
-    );
+    setState(mergeState(readJson<Partial<CaseState>>(STATE_KEY, emptyState)));
     setReady(true);
   }, []);
 
@@ -67,7 +83,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const payouts = useMemo(() => {
     const extras = userPayouts.filter((p) => !SEED_PAYOUTS.some((s) => s.id === p.id));
-    return [...SEED_PAYOUTS, ...extras];
+    const overrides = new Map(userPayouts.map((p) => [p.id, p]));
+    const seeded = SEED_PAYOUTS.map((s) => {
+      const over = overrides.get(s.id);
+      return over ? { ...s, ...over, docs: s.docs, evidence: s.evidence } : s;
+    });
+    return [...seeded, ...extras];
   }, [userPayouts]);
 
   const value: Store = {
@@ -98,6 +119,29 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     lodgingOf: (payout) => state.lodging[payout.id] ?? payout.lodging,
     saveLodging: (id, lodging) =>
       setState((s) => ({ ...s, lodging: { ...s.lodging, [id]: lodging } })),
+    payeeOf: (id) => state.payee[id],
+    savePayee: (id, profile) =>
+      setState((s) => {
+        const marks = new Set(s.evidenceDone[id] ?? []);
+        ["payee-name", "payee-rrn", "payee-id", "payee-bank"].forEach((k) => marks.add(k));
+        return {
+          ...s,
+          payee: { ...s.payee, [id]: profile },
+          evidenceDone: { ...s.evidenceDone, [id]: [...marks] },
+        };
+      }),
+    contractOf: (id) => state.contracts[id] ?? SEED_PAYOUTS.find((p) => p.id === id)?.contract,
+    saveContract: (id, contract) =>
+      setState((s) => ({ ...s, contracts: { ...s.contracts, [id]: contract } })),
+    satisfactionOf: (surveyId) => state.satisfaction[surveyId] ?? [],
+    addSatisfaction: (surveyId, values) =>
+      setState((s) => ({
+        ...s,
+        satisfaction: {
+          ...s.satisfaction,
+          [surveyId]: [...(s.satisfaction[surveyId] ?? []), values],
+        },
+      })),
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -190,9 +190,40 @@ const schedule: ShootDay[] = [
   },
 ];
 
+const lecture = typeById("lecture");
 const freelancer = typeById("freelancer");
 
 export const SEED_PAYOUTS: Payout[] = [
+  {
+    id: "out-tm-260903-kimryeon",
+    typeId: "lecture",
+    side: "out",
+    title: "태백해설사 심화교육 강사료 · 김련",
+    partnerName: "김련",
+    partnerRole: "강사 · 동굴박사",
+    eventName: "2026 강원고생대국가지질공원 태백해설사 심화교육",
+    clientName: "태백고생대자연사박물관",
+    documentNo: "TM-260903",
+    needsContract: false,
+    gross: 2_000_000,
+    taxMethod: "business-3-3",
+    dueDate: "2026-09-10",
+    periodStart: "2026-09-03",
+    periodEnd: "2026-09-04",
+    workLines: ["동굴 지질강의", "용연동굴 · 고씨동굴 · 백룡동굴 현장답사"],
+    status: "collecting",
+    memo: "투어메이커와 별도 계약을 맺은 강사가 아닙니다. 이재명이 수배했고, 발주처(태백고생대자연사박물관) 견적 강사비 2,000,000원을 그대로 지출합니다. 지금은 이체에 필요한 성명·주민등록번호·신분증·본인 계좌만 받습니다.",
+    docs: [
+      {
+        id: "d-guidebook",
+        title: "태백해설사 심화교육 스마트 가이드북",
+        href: "https://indadady.github.io/260903_Taebaek/",
+        kind: "web",
+      },
+    ],
+    evidence: lecture.evidence,
+    survey: [],
+  },
   {
     id: "in-yeongseo-yeongdong",
     typeId: "freelancer",
@@ -205,7 +236,7 @@ export const SEED_PAYOUTS: Payout[] = [
     taxMethod: "other-income-60",
     dueDate: "2026-10-10",
     status: "contract",
-    memo: "투어메이커 법인 지출이 아니라, 대표 이재명이 받은 기타소득 자문료입니다. 계약·촬영계획·서명링크·설문을 한 묶음으로 남겨 이후 강사료·수익쉐어 증빙 형식으로 씁니다.",
+    memo: "법인 손금이 아닙니다. 명륜아지트가 이재명 개인에게 준 자문료입니다. 링크만으로 계약·자료를 받은 형식을 남겨 둔 참고 사례입니다.",
     docs: [
       {
         id: "d-contract",

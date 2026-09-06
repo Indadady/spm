@@ -23,7 +23,6 @@ export function calcTax(input: {
   days?: number;
 }): TaxResult {
   const gross = Math.max(0, Math.round(input.gross || 0));
-  const days = Math.max(1, input.days ?? 1);
 
   if (input.method === "tax-invoice") {
     return {
@@ -58,8 +57,8 @@ export function calcTax(input: {
       withholding,
       net: gross - withholding,
       notes: [
-        "사업자등록이 없는 개인(프리랜서)에게 용역비를 지급할 때 씁니다.",
-        "소득세 3% + 지방소득세 0.3%를 원천징수한 뒤 다음 달 10일까지 신고·납부합니다.",
+        "법인에서 개인에게 나가는 지출은 사업소득으로 보고 3.3%를 원천합니다.",
+        "소득세 3% + 지방소득세 0.3%를 뺀 금액을 본인 명의 계좌로 이체합니다.",
       ],
     };
   }
@@ -101,48 +100,6 @@ export function calcTax(input: {
       withholding: incomeTax + localTax,
       net: gross - incomeTax - localTax,
       notes,
-    };
-  }
-
-  if (input.method === "daily-wage") {
-    const daily = floorWon(gross / days);
-    const dailyTaxable = Math.max(0, daily - 150_000);
-    let incomeTax = floorWon(dailyTaxable * 0.06) * days;
-    if (incomeTax < 1_000) incomeTax = 0;
-    const localTax = floorWon(incomeTax * 0.1);
-    return {
-      method: input.method,
-      methodLabel: "일용근로소득",
-      gross,
-      expense: Math.min(gross, 150_000 * days),
-      taxable: dailyTaxable * days,
-      incomeTax,
-      localTax,
-      withholding: incomeTax + localTax,
-      net: gross - incomeTax - localTax,
-      notes: [
-        `근무 ${days}일 · 환산 일당 ${daily.toLocaleString("ko-KR")}원 기준입니다.`,
-        "일용근로는 1일 15만 원까지 근로소득공제 후 6%(+지방 0.6%)를 원천징수합니다.",
-        "징수세액이 1천 원 미만이면 소액부징수로 원천징수하지 않습니다.",
-      ],
-    };
-  }
-
-  if (input.method === "wage") {
-    return {
-      method: input.method,
-      methodLabel: "근로소득 (간이세액)",
-      gross,
-      expense: 0,
-      taxable: gross,
-      incomeTax: 0,
-      localTax: 0,
-      withholding: 0,
-      net: gross,
-      notes: [
-        "정규·계약 인건비는 간이세액표와 사대보험을 급여 프로그램에서 계산합니다.",
-        "SPM에는 계약·이체·원천징수영수증만 묶어 두고, 세액은 급여 원장 숫자를 그대로 적습니다.",
-      ],
     };
   }
 

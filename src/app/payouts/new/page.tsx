@@ -12,38 +12,32 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
 const taxChoices: { id: TaxMethod; label: string }[] = [
-  { id: "wage", label: "근로소득 · 간이세액" },
-  { id: "daily-wage", label: "일용근로 6.6%" },
-  { id: "other-income-60", label: "기타소득 8.8%" },
   { id: "business-3-3", label: "사업소득 3.3%" },
   { id: "tax-invoice", label: "세금계산서 (원천 없음)" },
-  { id: "manual", label: "직접 입력" },
 ];
 
 function NewPayoutForm() {
   const router = useRouter();
   const params = useSearchParams();
   const { addPayout } = useStore();
-  const preset = (params.get("type") as PayoutTypeId | null) ?? "freelancer";
+  const preset = (params.get("type") as PayoutTypeId | null) ?? "lecture";
   const [typeId, setTypeId] = useState<PayoutTypeId>(
-    PAYOUT_TYPES.some((t) => t.id === preset) ? preset : "freelancer"
+    PAYOUT_TYPES.some((t) => t.id === preset) ? preset : "lecture"
   );
-  const type = useMemo(() => PAYOUT_TYPES.find((t) => t.id === typeId)!, [typeId]);
+  const type = useMemo(() => PAYOUT_TYPES.find((x) => x.id === typeId)!, [typeId]);
   const [taxMethod, setTaxMethod] = useState<TaxMethod>(type.taxDefault);
   const [title, setTitle] = useState("");
   const [partner, setPartner] = useState("");
   const [eventName, setEventName] = useState("");
+  const [clientName, setClientName] = useState("");
   const [gross, setGross] = useState("");
-  const [days, setDays] = useState("1");
   const [due, setDue] = useState(todaySeoulIso());
   const [memo, setMemo] = useState("");
-  const [rooms, setRooms] = useState(false);
 
   function onType(next: PayoutTypeId) {
     setTypeId(next);
     const t = PAYOUT_TYPES.find((x) => x.id === next)!;
     setTaxMethod(t.taxDefault);
-    if (next === "event-staff" || next === "lecture") setRooms(true);
   }
 
   return (
@@ -60,36 +54,23 @@ function NewPayoutForm() {
           partnerName: partner.trim() || "미정",
           partnerRole: type.payee,
           eventName: eventName.trim() || undefined,
+          clientName: clientName.trim() || undefined,
+          needsContract: false,
           gross: Number(gross.replace(/,/g, "")) || 0,
           taxMethod,
-          days: typeId === "event-staff" ? Number(days) || 1 : undefined,
           dueDate: due,
           status: "collecting",
           memo: memo.trim() || undefined,
           docs: [],
           evidence: type.evidence,
-          survey: type.survey,
-          lodging: rooms
-            ? {
-                name: "",
-                address: "",
-                note: "숙소명과 호수는 현장에서 받은 배정만 적습니다.",
-                people: partner.trim()
-                  ? [{ id: "payee", name: partner.trim(), role: type.payee }]
-                  : [],
-                rooms: [
-                  { id: "r1", label: "호수 미정 A", type: "twin", occupantIds: [] },
-                  { id: "r2", label: "호수 미정 B", type: "twin", occupantIds: [] },
-                ],
-              }
-            : undefined,
+          survey: [],
         };
         addPayout(payout);
         router.push(`/payouts/${id}`);
       }}
     >
       <div className="space-y-1.5">
-        <Label>지급 유형</Label>
+        <Label>지출 유형</Label>
         <select
           className="h-9 w-full rounded-lg border border-input bg-card px-2.5 text-sm"
           value={typeId}
@@ -109,18 +90,18 @@ function NewPayoutForm() {
           id="title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="예: 고한중 오사카 인솔 보조"
+          placeholder="예: 태백해설사 심화교육 강사료 · 김련"
         />
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor="partner">지급 대상</Label>
+          <Label htmlFor="partner">받는 사람</Label>
           <Input
             id="partner"
             value={partner}
             onChange={(e) => setPartner(e.target.value)}
             required
-            placeholder="이름 또는 상호"
+            placeholder="이름"
           />
         </div>
         <div className="space-y-1.5">
@@ -128,16 +109,25 @@ function NewPayoutForm() {
           <Input id="event" value={eventName} onChange={(e) => setEventName(e.target.value)} />
         </div>
       </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="client">발주처 (있으면)</Label>
+        <Input
+          id="client"
+          value={clientName}
+          onChange={(e) => setClientName(e.target.value)}
+          placeholder="예: 태백고생대자연사박물관"
+        />
+      </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor="gross">지급 총액 (세전)</Label>
+          <Label htmlFor="gross">지출 총액 (세전)</Label>
           <Input
             id="gross"
             inputMode="numeric"
             value={gross}
             onChange={(e) => setGross(e.target.value)}
             required
-            placeholder="300000"
+            placeholder="2000000"
           />
         </div>
         <div className="space-y-1.5">
@@ -145,12 +135,6 @@ function NewPayoutForm() {
           <Input id="due" type="date" value={due} onChange={(e) => setDue(e.target.value)} />
         </div>
       </div>
-      {typeId === "event-staff" ? (
-        <div className="space-y-1.5">
-          <Label htmlFor="days">근무 일수</Label>
-          <Input id="days" inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} />
-        </div>
-      ) : null}
       <div className="space-y-1.5">
         <Label>원천 방식</Label>
         <select
@@ -165,16 +149,12 @@ function NewPayoutForm() {
           ))}
         </select>
       </div>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={rooms} onChange={(e) => setRooms(e.target.checked)} />
-        숙소 객실배정 칸을 함께 만든다
-      </label>
       <div className="space-y-1.5">
         <Label htmlFor="memo">메모</Label>
         <Textarea id="memo" value={memo} onChange={(e) => setMemo(e.target.value)} />
       </div>
       <Button type="submit" className="w-full sm:w-auto">
-        등록하고 증빙 묶기
+        등록하고 자료 링크 만들기
       </Button>
     </form>
   );
@@ -183,9 +163,10 @@ function NewPayoutForm() {
 export default function NewPayoutPage() {
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">새 지급</h1>
+      <h1 className="text-2xl font-bold">새 지출</h1>
       <p className="text-sm text-muted-foreground">
-        유형을 고르면 원천 방식과 필수 증빙, 설문이 따라붙습니다. 이 브라우저에 저장됩니다.
+        받는 사람에게 보낼 링크가 생깁니다. 이름·주민등록번호·신분증·본인 계좌를 받아 3.3%를 뺀 뒤
+        이체하면 됩니다. 이 브라우저에 저장됩니다.
       </p>
       <Suspense>
         <NewPayoutForm />

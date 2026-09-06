@@ -1,6 +1,9 @@
+"use client";
+
 import { buttonVariants } from "@/components/ui/button";
 import { FolderOpen, Landmark, LayoutGrid, Plus } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const nav = [
@@ -10,6 +13,23 @@ const nav = [
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const path = usePathname();
+  const bare = path.startsWith("/p/") || path.startsWith("/s/");
+
+  if (bare) {
+    return (
+      <div className="flex min-h-full flex-col bg-background">
+        <header className="border-b border-white/10 bg-[color:var(--navy)] text-white">
+          <div className="mx-auto max-w-lg px-4 py-3">
+            <p className="text-sm font-bold">주식회사 투어메이커</p>
+            <p className="text-xs text-white/70">지출 자료 수집</p>
+          </div>
+        </header>
+        <main className="mx-auto w-full max-w-lg flex-1 px-4 py-5">{children}</main>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-full flex-col bg-background">
       <header className="sticky top-0 z-40 border-b border-border/80 bg-[color:var(--navy)] text-white">
@@ -43,7 +63,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               )}
             >
               <Plus className="size-4" />
-              새 지급
+              새 지출
             </Link>
           </div>
         </div>
@@ -68,12 +88,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             className="flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium text-[color:var(--navy)]"
           >
             <Plus className="size-4" />
-            새 지급
+            새 지출
           </Link>
         </div>
       </nav>
       <footer className="hidden border-t py-4 text-center text-xs text-muted-foreground sm:block">
-        (주)투어메이커 · 법인 지급 원천징수와 파트너 증빙을 한곳에 묶습니다.
+        (주)투어메이커 · 법인 지출은 사업소득 3.3% 원천 후 이체합니다.
       </footer>
     </div>
   );

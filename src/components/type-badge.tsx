@@ -3,7 +3,6 @@ import type { PayoutTypeId } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const colors: Record<PayoutTypeId, string> = {
-  labor: "bg-sky-100 text-sky-900",
   "event-staff": "bg-amber-100 text-amber-950",
   lecture: "bg-violet-100 text-violet-950",
   experience: "bg-emerald-100 text-emerald-950",

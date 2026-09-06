@@ -1,5 +1,4 @@
 export type PayoutTypeId =
-  | "labor"
   | "event-staff"
   | "lecture"
   | "experience"
@@ -8,15 +7,7 @@ export type PayoutTypeId =
 
 export type LedgerSide = "out" | "in";
 
-export type TaxMethod =
-  | "wage"
-  | "daily-wage"
-  | "other-income-60"
-  | "business-3-3"
-  | "tax-invoice"
-  | "manual";
-
-export type PayeeKind = "employee" | "daily" | "sole-prop" | "freelancer" | "partner";
+export type TaxMethod = "business-3-3" | "tax-invoice" | "other-income-60";
 
 export type PayoutStatus =
   | "collecting"
@@ -86,7 +77,7 @@ export type ShootDay = {
 export type SurveyQuestion = {
   id: string;
   label: string;
-  type: "text" | "tel" | "select" | "textarea" | "yesno" | "check";
+  type: "text" | "tel" | "select" | "textarea" | "yesno" | "check" | "scale";
   options?: string[];
   required?: boolean;
   help?: string;
@@ -113,6 +104,19 @@ export type Contract = {
   pdfHref?: string;
 };
 
+export type PayeeProfile = {
+  name: string;
+  rrn: string;
+  phone?: string;
+  bank: string;
+  account: string;
+  holder: string;
+  idImageDataUrl?: string;
+  idFileName?: string;
+  privacyAgreed: boolean;
+  submittedAt?: string;
+};
+
 export type Payout = {
   id: string;
   typeId: PayoutTypeId;
@@ -121,6 +125,9 @@ export type Payout = {
   partnerName: string;
   partnerRole: string;
   eventName?: string;
+  clientName?: string;
+  documentNo?: string;
+  needsContract?: boolean;
   gross: number;
   taxMethod: TaxMethod;
   days?: number;
@@ -128,6 +135,9 @@ export type Payout = {
   revenueAmount?: number;
   dueDate: string;
   paidDate?: string;
+  periodStart?: string;
+  periodEnd?: string;
+  workLines?: string[];
   status: PayoutStatus;
   memo?: string;
   hasBusinessReg?: boolean;

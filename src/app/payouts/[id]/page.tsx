@@ -1,6 +1,8 @@
 "use client";
 
+import { CopyLink } from "@/components/copy-link";
 import { EvidenceList } from "@/components/evidence-list";
+import { PayeeCard } from "@/components/payee-card";
 import { PayoutSubnav } from "@/components/payout-subnav";
 import { TaxCard } from "@/components/tax-card";
 import { TypeBadge } from "@/components/type-badge";
@@ -13,6 +15,7 @@ import { todaySeoulIso } from "@/lib/format";
 import { ExternalLink, FileText } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
 const statusLabel = {
   collecting: "자료 수집",
@@ -25,12 +28,15 @@ const statusLabel = {
 export default function PayoutPage() {
   const { id } = useParams<{ id: string }>();
   const payout = usePayout(id);
-  const { setStatus, ready } = useStore();
+  const { setStatus, ready, payeeOf } = useStore();
+  const [origin, setOrigin] = useState("");
+  useEffect(() => setOrigin(window.location.origin), []);
 
   if (!ready) return <p className="text-sm text-muted-foreground">불러오는 중…</p>;
   if (!payout) return <p>해당 건을 찾을 수 없습니다.</p>;
 
   const type = typeById(payout.typeId);
+  const collectUrl = origin ? `${origin}/p/${payout.id}` : "";
 
   return (
     <div className="space-y-5">
@@ -41,14 +47,15 @@ export default function PayoutPage() {
         <div className="flex flex-wrap items-center gap-2">
           <TypeBadge id={payout.typeId} name={type.name} href={`/types/${type.id}`} />
           <span className="text-xs text-muted-foreground">
-            {payout.side === "in" ? "기타소득 수입 샘플" : "법인 지급"} ·{" "}
-            {statusLabel[payout.status]}
+            {payout.side === "in" ? "참고 수입 사례" : "법인 지출"} · {statusLabel[payout.status]}
           </span>
         </div>
         <h1 className="text-2xl font-bold leading-tight">{payout.title}</h1>
         <p className="text-sm text-muted-foreground">
           {payout.partnerName} ({payout.partnerRole})
+          {payout.clientName ? ` · 발주 ${payout.clientName}` : ""}
           {payout.eventName ? ` · ${payout.eventName}` : ""}
+          {payout.documentNo ? ` · ${payout.documentNo}` : ""}
           {" · "}지급일 {formatDate(payout.dueDate)}
         </p>
       </div>
@@ -57,7 +64,24 @@ export default function PayoutPage() {
         <p className="rounded-xl bg-accent/70 px-4 py-3 text-sm leading-relaxed">{payout.memo}</p>
       ) : null}
 
+      {payout.side === "out" ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">자료 받는 링크</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {collectUrl || "주소를 만드는 중…"}
+            </p>
+          </div>
+          {collectUrl ? <CopyLink url={collectUrl} /> : null}
+          <Link href={`/p/${payout.id}`} className="text-xs underline">
+            미리보기
+          </Link>
+        </div>
+      ) : null}
+
       <TaxCard payout={payout} />
+
+      {payout.side === "out" ? <PayeeCard payout={payout} payee={payeeOf(payout.id)} /> : null}
 
       <div className="flex flex-wrap gap-2">
         {payout.side === "out" ? (

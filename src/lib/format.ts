@@ -19,6 +19,12 @@ export function formatDate(iso: string) {
   return `${get("year")}.${get("month")}.${get("day")} (${get("weekday")})`;
 }
 
+export function maskRrn(rrn: string) {
+  const digits = rrn.replace(/\D/g, "");
+  if (digits.length < 7) return rrn || "—";
+  return `${digits.slice(0, 6)}-${digits[6]}${"*".repeat(Math.max(0, digits.length - 7))}`;
+}
+
 export function todaySeoulIso() {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",

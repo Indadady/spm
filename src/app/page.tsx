@@ -1,15 +1,17 @@
 "use client";
 
+import { CopyLink } from "@/components/copy-link";
 import { TypeBadge } from "@/components/type-badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatWon } from "@/lib/format";
-import { PAYOUT_TYPES } from "@/lib/payout-types";
+import { PAYOUT_TYPES, payeeReady } from "@/lib/payout-types";
 import { useStore } from "@/lib/store";
 import { calcTax } from "@/lib/tax";
 import type { Payout } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 const statusLabel: Record<Payout["status"], string> = {
   collecting: "자료 수집",
@@ -33,11 +35,18 @@ function sums(list: Payout[]) {
 }
 
 export default function HomePage() {
-  const { payouts, ready } = useStore();
+  const { payouts, ready, payeeOf } = useStore();
+  const [origin, setOrigin] = useState("");
+  useEffect(() => setOrigin(window.location.origin), []);
+
   const outgoing = payouts.filter((p) => p.side === "out");
   const incoming = payouts.filter((p) => p.side === "in");
   const outSum = sums(outgoing);
-  const inSum = sums(incoming);
+  const nextPay = outgoing.find((p) => p.status !== "paid") ?? outgoing[0];
+  const nextTax = nextPay
+    ? calcTax({ method: nextPay.taxMethod, gross: nextPay.gross })
+    : null;
+  const nextReady = nextPay ? payeeReady(payeeOf(nextPay.id)) : false;
 
   return (
     <div className="space-y-6">
@@ -46,20 +55,71 @@ export default function HomePage() {
           TOURMAKER SPM
         </p>
         <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
-          법인에서 나가는 돈은 원천 후 이체,
-          <br className="hidden sm:block" /> 증빙은 한 묶음으로.
+          먼저 이체 자료를 받고,
+          <br className="hidden sm:block" /> 3.3%를 뺀 뒤 보냅니다.
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          인건비, 행사요원, 강사료, 체험비, 개인사업자·프리랜서, 수익쉐어.
-          설문으로 계좌를 받고, 계약에 서명하고, 필요하면 객실까지 배정한 뒤
-          원천징수 숫자를 원장에 남깁니다.
+          직원 급여는 넣지 않습니다. 강사료·요원비·체험비·용역비는 사업소득으로 보고
+          원천 3.3%를 제외한 금액을 이체합니다. 객실배정·만족도 설문은 이 화면과 묶지 않습니다.
         </p>
       </section>
+
+      {nextPay && nextTax ? (
+        <Card className="border-[color:var(--gold)]/40">
+          <CardHeader>
+            <p className="text-xs font-semibold text-[color:var(--gold-ink)]">바로 처리할 지출</p>
+            <CardTitle className="text-xl">{nextPay.title}</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              {nextPay.clientName ? `${nextPay.clientName} 발주 · ` : ""}
+              {nextPay.eventName}
+              {nextPay.documentNo ? ` · ${nextPay.documentNo}` : ""}
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {nextPay.memo ? (
+              <p className="text-sm leading-relaxed text-muted-foreground">{nextPay.memo}</p>
+            ) : null}
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div>
+                <p className="text-xs text-muted-foreground">발주처 금액</p>
+                <p className="text-lg font-bold tabular-nums">{formatWon(nextTax.gross)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">원천 3.3%</p>
+                <p className="text-lg font-bold tabular-nums">{formatWon(nextTax.withholding)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">이체액</p>
+                <p className="text-lg font-bold tabular-nums">{formatWon(nextTax.net)}</p>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {nextReady
+                ? "이체용 자료를 받았습니다."
+                : "이름, 주민등록번호, 신분증, 본인 계좌만 받으면 이체할 수 있습니다."}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Link href={`/payouts/${nextPay.id}`} className={cn(buttonVariants({ size: "sm" }))}>
+                지출 건 열기
+              </Link>
+              {origin ? (
+                <CopyLink url={`${origin}/p/${nextPay.id}`} label="자료 받는 링크 복사" />
+              ) : null}
+              <Link
+                href="/s/tm-260903"
+                className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
+              >
+                행사 만족도 설문 (별도)
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm text-muted-foreground">법인 지급 총액</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">법인 지출 총액</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold tabular-nums">{formatWon(outSum.gross)}</p>
@@ -77,19 +137,19 @@ export default function HomePage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm text-muted-foreground">기타소득 수입</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">참고 수입 사례</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold tabular-nums">{formatWon(inSum.net)}</p>
-            <p className="text-xs text-muted-foreground">
-              실수령 · 원천 {formatWon(inSum.withholding)}
+            <p className="text-2xl font-bold tabular-nums">
+              {formatWon(sums(incoming).gross)}
             </p>
+            <p className="text-xs text-muted-foreground">법인 손금과 섞지 않습니다</p>
           </CardContent>
         </Card>
       </div>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-bold">지급 유형</h2>
+        <h2 className="text-lg font-bold">지출 유형</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           {PAYOUT_TYPES.map((t) => {
             const items = outgoing.filter((p) => p.typeId === t.id);
@@ -100,9 +160,7 @@ export default function HomePage() {
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <TypeBadge id={t.id} name={t.name} />
-                      <span className="text-xs text-muted-foreground">
-                        {items.length}건
-                      </span>
+                      <span className="text-xs text-muted-foreground">{items.length}건</span>
                     </div>
                     <CardTitle className="mt-1">{t.short}</CardTitle>
                   </CardHeader>
@@ -110,11 +168,9 @@ export default function HomePage() {
                     <p className="text-sm leading-relaxed text-muted-foreground">{t.when}</p>
                     <p className="mt-2 text-xs text-muted-foreground">{t.taxHint}</p>
                     {ready && items.length > 0 ? (
-                      <p className="mt-2 text-sm font-semibold tabular-nums">
-                        {formatWon(s.gross)}
-                      </p>
+                      <p className="mt-2 text-sm font-semibold tabular-nums">{formatWon(s.gross)}</p>
                     ) : (
-                      <p className="mt-2 text-xs text-muted-foreground">아직 법인 지급 건이 없습니다.</p>
+                      <p className="mt-2 text-xs text-muted-foreground">아직 이 유형의 지출이 없습니다.</p>
                     )}
                   </CardContent>
                 </Card>
@@ -128,7 +184,7 @@ export default function HomePage() {
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold">최근 건</h2>
           <Link href="/payouts/new" className={cn(buttonVariants({ size: "sm" }))}>
-            새 지급 등록
+            새 지출
           </Link>
         </div>
         {payouts.length === 0 ? (
@@ -148,7 +204,7 @@ export default function HomePage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <TypeBadge id={p.typeId} name={type.name} />
                         <span className="text-[11px] text-muted-foreground">
-                          {p.side === "in" ? "수입 샘플" : "법인 지급"} · {statusLabel[p.status]}
+                          {p.side === "in" ? "참고 수입" : "법인 지출"} · {statusLabel[p.status]}
                         </span>
                       </div>
                       <p className="mt-1 font-semibold">{p.title}</p>

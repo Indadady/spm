@@ -32,7 +32,7 @@ export default function LedgerPage() {
       <div>
         <h1 className="text-2xl font-bold">원장</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          법인 지급은 원천 후 이체액이 실제 지출입니다. 수입 샘플은 따로 둡니다.
+          법인 지출은 발주처 금액에서 3.3%를 뺀 이체액이 실제 나갑니다. 참고 수입은 따로 둡니다.
         </p>
       </div>
       {!ready ? (
@@ -59,7 +59,7 @@ export default function LedgerPage() {
               <TableBody>
                 {rows.map(({ p, tax, type }) => (
                   <TableRow key={p.id}>
-                    <TableCell>{p.side === "in" ? "수입" : "지급"}</TableCell>
+                    <TableCell>{p.side === "in" ? "참고" : "지출"}</TableCell>
                     <TableCell>
                       <TypeBadge id={p.typeId} name={type.name} />
                     </TableCell>
@@ -82,7 +82,7 @@ export default function LedgerPage() {
           </div>
           {inn.length > 0 ? (
             <p className="text-xs text-muted-foreground">
-              수입 건은 대표 개인 기타소득 자료입니다. 법인 손금과 섞지 마세요.
+              참고 수입은 대표 개인이 다른 사업자에게 받은 건입니다. 법인 손금과 섞지 마세요.
             </p>
           ) : null}
         </>
