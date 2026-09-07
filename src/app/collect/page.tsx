@@ -1,14 +1,17 @@
 "use client";
 
 import { GroupCopyLink } from "@/components/group-copy-link";
-import { buttonVariants } from "@/components/ui/button";
-import { collectKindLabel } from "@/lib/group-collect";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { collectKindLabel, deleteCampaign } from "@/lib/group-collect";
 import { useGroupStore } from "@/lib/group-store";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import { useState } from "react";
 
 export default function CollectPage() {
-  const { campaigns, ready } = useGroupStore();
+  const { campaigns, ready, removeCampaign } = useGroupStore();
+  const [deletingId, setDeletingId] = useState("");
+  const [error, setError] = useState("");
 
   return (
     <div className="space-y-5">
@@ -24,6 +27,8 @@ export default function CollectPage() {
           새 링크
         </Link>
       </div>
+
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       {!ready ? (
         <p className="text-sm text-muted-foreground">불러오는 중…</p>
@@ -45,8 +50,29 @@ export default function CollectPage() {
                   {c.expectedCount ? ` · 예상 ${c.expectedCount}명` : ""}
                 </p>
               </Link>
-              <div className="mt-1 flex justify-end">
+              <div className="mt-1 flex justify-end gap-2">
                 <GroupCopyLink campaignId={c.id} ogSlot={c.ogSlot} label="자료 링크 복사" />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  disabled={deletingId === c.id}
+                  onClick={async () => {
+                    if (!window.confirm(`${c.title} 링크와 받은 자료를 삭제할까요?`)) return;
+                    setDeletingId(c.id);
+                    setError("");
+                    try {
+                      await deleteCampaign(c.id);
+                      removeCampaign(c.id);
+                    } catch {
+                      setError("지우지 못했습니다. 연결을 확인하고 다시 시도해 주세요.");
+                    } finally {
+                      setDeletingId("");
+                    }
+                  }}
+                >
+                  {deletingId === c.id ? "지우는 중…" : "삭제"}
+                </Button>
               </div>
             </li>
           ))}

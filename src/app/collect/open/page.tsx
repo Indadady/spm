@@ -4,27 +4,37 @@ import { CopyTextButton } from "@/components/copy-text-button";
 import { Button } from "@/components/ui/button";
 import {
   collectKindLabel,
+  deleteAllGroupEntries,
+  deleteCampaign,
+  deleteGroupEntry,
   groupEntriesCsv,
   groupNoticeText,
   groupSharePath,
   groupWatchPath,
   needsPassport,
+  needsRole,
   needsRrn,
   roleLabel,
 } from "@/lib/group-collect";
 import { absoluteUrl } from "@/lib/paths";
 import { useGroupCampaign } from "@/lib/use-group-campaign";
 import { useGroupInbox } from "@/lib/use-group-inbox";
+import { useGroupStore } from "@/lib/group-store";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 
 function CollectOpenBody() {
   const id = useSearchParams().get("id") ?? "";
   const { campaign, waiting, missing } = useGroupCampaign(id);
   const inbox = useGroupInbox(id);
+  const { removeCampaign } = useGroupStore();
+  const router = useRouter();
   const [shareUrl, setShareUrl] = useState("");
   const [watchUrl, setWatchUrl] = useState("");
+  const [deletingId, setDeletingId] = useState("");
+  const [clearing, setClearing] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!id) return;
@@ -81,7 +91,7 @@ function CollectOpenBody() {
         </div>
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-2">
         <Button
           type="button"
           size="sm"
@@ -100,7 +110,50 @@ function CollectOpenBody() {
         >
           엑셀용 CSV
         </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="destructive"
+          disabled={inbox.rows.length === 0 || clearing}
+          onClick={async () => {
+            if (!window.confirm("받은 자료를 모두 삭제할까요? 되돌릴 수 없습니다.")) return;
+            setClearing(true);
+            setError("");
+            try {
+              await deleteAllGroupEntries(campaign.id);
+            } catch {
+              setError("자료를 지우지 못했습니다. 연결을 확인하고 다시 시도해 주세요.");
+            } finally {
+              setClearing(false);
+            }
+          }}
+        >
+          {clearing ? "지우는 중…" : "받은 자료 모두 삭제"}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={clearing}
+          onClick={async () => {
+            if (!window.confirm("이 링크와 받은 자료를 삭제할까요? 되돌릴 수 없습니다.")) return;
+            setClearing(true);
+            setError("");
+            try {
+              await deleteCampaign(campaign.id);
+              removeCampaign(campaign.id);
+              router.push("/collect");
+            } catch {
+              setError("링크를 지우지 못했습니다. 연결을 확인하고 다시 시도해 주세요.");
+              setClearing(false);
+            }
+          }}
+        >
+          링크 삭제
+        </Button>
       </div>
+
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       {inbox.rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">아직 제출이 없습니다. 단체방에 공지를 올려 주세요.</p>
@@ -114,10 +167,32 @@ function CollectOpenBody() {
                   <div>
                     <p className="font-semibold">{row.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {roleLabel(row.role)}
-                      {row.phone ? ` · ${row.phone}` : ""}
+                      {needsRole(campaign.kind) ? `${roleLabel(row.role)}${row.phone ? " · " : ""}` : ""}
+                      {row.phone ?? ""}
                     </p>
                   </div>
+                  {row.remoteId ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      disabled={deletingId === row.remoteId || clearing}
+                      onClick={async () => {
+                        if (!window.confirm(`${row.name} 제출을 삭제할까요?`)) return;
+                        setDeletingId(row.remoteId ?? "");
+                        setError("");
+                        try {
+                          await deleteGroupEntry(campaign.id, row.remoteId ?? "");
+                        } catch {
+                          setError("지우지 못했습니다. 연결을 확인하고 다시 시도해 주세요.");
+                        } finally {
+                          setDeletingId("");
+                        }
+                      }}
+                    >
+                      {deletingId === row.remoteId ? "지우는 중…" : "삭제"}
+                    </Button>
+                  ) : null}
                 </div>
                 <dl className="mt-2 grid grid-cols-[6.5rem_1fr] gap-y-1 text-sm">
                   {needsRrn(campaign.kind) ? (

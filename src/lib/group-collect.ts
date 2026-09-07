@@ -1,8 +1,10 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
   query,
   setDoc,
@@ -56,6 +58,10 @@ export function needsRrn(kind: CollectKind) {
 }
 
 export function needsPassport(kind: CollectKind) {
+  return kind === "passport" || kind === "both";
+}
+
+export function needsRole(kind: CollectKind) {
   return kind === "passport" || kind === "both";
 }
 
@@ -228,6 +234,26 @@ export async function submitGroupEntry(campaign: GroupCampaign, entry: GroupEntr
   return { remoteId: docRef.id, passportImageUrl };
 }
 
+export async function deleteGroupEntry(campaignId: string, entryId: string) {
+  if (!campaignId || !entryId) return;
+  await withTimeout(ensureAnonAuth(), 8_000, "auth");
+  await withTimeout(deleteDoc(doc(groupEntriesCol(campaignId), entryId)), 8_000, "delete");
+}
+
+export async function deleteAllGroupEntries(campaignId: string) {
+  if (!campaignId) return;
+  await withTimeout(ensureAnonAuth(), 8_000, "auth");
+  const snap = await withTimeout(getDocs(query(groupEntriesCol(campaignId))), 8_000, "list");
+  await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+}
+
+export async function deleteCampaign(campaignId: string) {
+  if (!campaignId) return;
+  await deleteAllGroupEntries(campaignId);
+  await withTimeout(ensureAnonAuth(), 8_000, "auth");
+  await withTimeout(deleteDoc(doc(groupCampaignsCol(), campaignId)), 8_000, "delete");
+}
+
 export function subscribeGroupEntries(
   campaignId: string,
   onChange: (rows: GroupEntry[], status: InboxStatus) => void
@@ -261,14 +287,16 @@ export function subscribeGroupEntries(
 }
 
 export function groupEntriesCsv(kind: CollectKind, rows: GroupEntry[]) {
-  const cols = ["성명", "연락처", "구분"];
+  const cols = ["성명", "연락처"];
+  if (needsRole(kind)) cols.push("구분");
   if (needsRrn(kind)) cols.push("주민등록번호");
   if (needsPassport(kind)) cols.push("영문성명", "여권번호", "여권사진");
   cols.push("제출시각");
   const lines = [
     cols.join(","),
     ...rows.map((row) => {
-      const cells = [row.name, row.phone ?? "", roleLabel(row.role)];
+      const cells = [row.name, row.phone ?? ""];
+      if (needsRole(kind)) cells.push(roleLabel(row.role));
       if (needsRrn(kind)) cells.push(row.rrn ?? "");
       if (needsPassport(kind)) {
         cells.push(row.passportName ?? "", row.passportNo ?? "", row.passportImageUrl ?? "");

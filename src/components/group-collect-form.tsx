@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   needsPassport,
+  needsRole,
   needsRrn,
   submitGroupEntry,
   type GroupCampaign,
@@ -80,7 +81,7 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
           await submitGroupEntry(campaign, {
             name: name.trim(),
             phone: phone.trim(),
-            role,
+            role: needsRole(campaign.kind) ? role : "guest",
             rrn: wantRrn ? rrn.trim() : undefined,
             passportName: wantPass ? passportName.trim() || undefined : undefined,
             passportNo: wantPass ? passportNo.trim() || undefined : undefined,
@@ -112,31 +113,33 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
           required
         />
       </div>
-      <div className="space-y-1.5">
-        <Label>구분</Label>
-        <div className="grid grid-cols-2 gap-2">
-          {(
-            [
-              ["guest", "참가자"],
-              ["leader", "인솔"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              className={cn(
-                "h-10 rounded-xl border text-sm font-medium",
-                role === id
-                  ? "border-[color:var(--navy)] bg-accent/70 text-[color:var(--navy)]"
-                  : "bg-card text-muted-foreground"
-              )}
-              onClick={() => setRole(id)}
-            >
-              {label}
-            </button>
-          ))}
+      {needsRole(campaign.kind) ? (
+        <div className="space-y-1.5">
+          <Label>구분</Label>
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                ["guest", "참가자"],
+                ["leader", "인솔"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                className={cn(
+                  "h-10 rounded-xl border text-sm font-medium",
+                  role === id
+                    ? "border-[color:var(--navy)] bg-accent/70 text-[color:var(--navy)]"
+                    : "bg-card text-muted-foreground"
+                )}
+                onClick={() => setRole(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : null}
       {wantRrn ? (
         <div className="space-y-1.5">
           <Label htmlFor="g-rrn">주민등록번호</Label>

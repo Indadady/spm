@@ -10,6 +10,7 @@ type GroupStore = {
   ready: boolean;
   addCampaign: (c: GroupCampaign) => void;
   rememberCampaign: (c: GroupCampaign) => void;
+  removeCampaign: (id: string) => void;
   campaignOf: (id: string) => GroupCampaign | undefined;
 };
 
@@ -49,6 +50,7 @@ export function GroupStoreProvider({ children }: { children: React.ReactNode }) 
         if (exists) return prev.map((x) => (x.id === c.id ? { ...x, ...c } : x));
         return [c, ...prev];
       }),
+    removeCampaign: (id) => setCampaigns((prev) => prev.filter((c) => c.id !== id)),
     campaignOf: (id) => campaigns.find((c) => c.id === id),
   };
 
