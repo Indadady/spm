@@ -1,7 +1,7 @@
 "use client";
 
 import { COMPANY, COMPANY_LOGO } from "@/lib/company";
-import { collectKindLabel, needsPassport, needsRole, needsRrn, roleLabel } from "@/lib/group-collect";
+import { collectKindLabel, needsPassport, needsRrn } from "@/lib/group-collect";
 import { useGroupCampaign } from "@/lib/use-group-campaign";
 import { useGroupInbox } from "@/lib/use-group-inbox";
 
@@ -52,9 +52,6 @@ export function GroupProgressView({ id }: { id: string }) {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="font-semibold">{row.name}</p>
-                  {needsRole(campaign.kind) ? (
-                    <p className="text-xs text-muted-foreground">{roleLabel(row.role)}</p>
-                  ) : null}
                 </div>
                 <span className="shrink-0 text-xs text-[color:var(--gold-ink)]">제출</span>
               </div>

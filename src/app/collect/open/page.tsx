@@ -12,9 +12,7 @@ import {
   groupSharePath,
   groupWatchPath,
   needsPassport,
-  needsRole,
   needsRrn,
-  roleLabel,
 } from "@/lib/group-collect";
 import { absoluteUrl } from "@/lib/paths";
 import { useGroupCampaign } from "@/lib/use-group-campaign";
@@ -43,9 +41,9 @@ function CollectOpenBody() {
   }, [id, campaign?.ogSlot]);
 
   const notice = useMemo(() => {
-    if (!campaign || !shareUrl) return "";
-    return groupNoticeText(campaign.title, shareUrl, campaign.kind);
-  }, [campaign, shareUrl]);
+    if (!campaign) return "";
+    return groupNoticeText(campaign.title, campaign.kind);
+  }, [campaign]);
 
   if (waiting) {
     return <p className="text-sm text-muted-foreground">불러오는 중…</p>;
@@ -80,13 +78,20 @@ function CollectOpenBody() {
 
       <div className="space-y-3 rounded-2xl border bg-card px-4 py-3">
         <div>
-          <p className="text-sm font-semibold">보낼 링크</p>
+          <p className="text-sm font-semibold">안내 문구</p>
           <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
-            {notice || "주소를 만드는 중…"}
+            {notice || "문구를 만드는 중…"}
+          </p>
+        </div>
+        <CopyTextButton text={notice} label="안내 문구 복사" />
+        <div>
+          <p className="text-sm font-semibold">자료 링크</p>
+          <p className="mt-1 break-all text-xs leading-relaxed text-muted-foreground">
+            {shareUrl || "주소를 만드는 중…"}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <CopyTextButton text={notice} label="자료 링크 복사" />
+          <CopyTextButton text={shareUrl} label="링크 복사" />
           <CopyTextButton text={watchUrl} label="담당자 현황 복사" />
         </div>
       </div>
@@ -166,10 +171,7 @@ function CollectOpenBody() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="font-semibold">{row.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {needsRole(campaign.kind) ? `${roleLabel(row.role)}${row.phone ? " · " : ""}` : ""}
-                      {row.phone ?? ""}
-                    </p>
+                    <p className="text-xs text-muted-foreground">{row.phone ?? ""}</p>
                   </div>
                   {row.remoteId ? (
                     <Button
@@ -205,12 +207,6 @@ function CollectOpenBody() {
                     <>
                       <dt className="text-muted-foreground">영문 성명</dt>
                       <dd>{row.passportName}</dd>
-                    </>
-                  ) : null}
-                  {needsPassport(campaign.kind) && row.passportNo ? (
-                    <>
-                      <dt className="text-muted-foreground">여권번호</dt>
-                      <dd className="tabular-nums">{row.passportNo}</dd>
                     </>
                   ) : null}
                 </dl>

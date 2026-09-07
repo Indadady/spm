@@ -13,6 +13,8 @@ import {
 import { getDownloadURL, ref, uploadString } from "firebase/storage";
 import { randomKakaoOgSlot } from "./company";
 import { ensureAnonAuth, getFirebase, SURVEY_APP_ID } from "./firebase";
+import { formatSeoulDateTime } from "./format";
+import { dataUrlBytes, shrinkDataUrl } from "./image-file";
 
 export type CollectKind = "insurance" | "passport" | "both";
 export type GroupRole = "guest" | "leader";
@@ -61,10 +63,6 @@ export function needsPassport(kind: CollectKind) {
   return kind === "passport" || kind === "both";
 }
 
-export function needsRole(kind: CollectKind) {
-  return kind === "passport" || kind === "both";
-}
-
 export function newGroupId() {
   const bytes = new Uint8Array(6);
   crypto.getRandomValues(bytes);
@@ -82,13 +80,12 @@ export function groupWatchPath(id: string, slot?: number) {
   return `/g/w/${n}/?id=${encodeURIComponent(id)}`;
 }
 
-export function groupNoticeText(title: string, url: string, kind: CollectKind) {
+export function groupNoticeText(title: string, kind: CollectKind) {
   const what =
     kind === "passport" ? "여권사본" : kind === "insurance" ? "여행자보험 자료" : "여행자보험·여권 자료";
   return `${title}
 ${what} 입력 부탁드립니다.
-각자 아래 링크에서 입력해 주세요. 자료는 투어메이커로 바로 전달됩니다.
-${url}`;
+각자 아래 링크에서 입력해 주세요. 자료는 투어메이커로 바로 전달됩니다.`;
 }
 
 export function roleLabel(role: GroupRole) {
@@ -168,17 +165,36 @@ export function entryFromDoc(
 async function uploadDataUrl(campaignId: string, dataUrl: string, fileName: string) {
   const { storage } = getFirebase();
   if (!storage) return undefined;
-  const path = `artifacts/${SURVEY_APP_ID}/public/spm/g/${campaignId}/${Date.now()}-${fileName}`;
+  const safe = fileName.replace(/[^a-zA-Z0-9._-]+/g, "").slice(0, 40) || "passport.jpg";
+  const path = `artifacts/${SURVEY_APP_ID}/public/spm/g/${campaignId}/${Date.now()}-${safe}`;
   const fileRef = ref(storage, path);
   await withTimeout(
     uploadString(fileRef, dataUrl, "data_url", {
       contentType: "image/jpeg",
       customMetadata: { originalName: fileName },
     }),
-    10_000,
+    20_000,
     "upload"
   );
-  return withTimeout(getDownloadURL(fileRef), 5_000, "url");
+  return withTimeout(getDownloadURL(fileRef), 8_000, "url");
+}
+
+async function compactImage(dataUrl?: string) {
+  if (!dataUrl) return "";
+  const steps: [number, number][] = [
+    [800, 0.52],
+    [560, 0.42],
+    [400, 0.35],
+  ];
+  for (const [max, quality] of steps) {
+    try {
+      const small = await shrinkDataUrl(dataUrl, max, quality);
+      if (dataUrlBytes(small) <= 220_000) return small;
+    } catch {
+      /* 다음 크기로 다시 줄입니다. */
+    }
+  }
+  return dataUrlBytes(dataUrl) <= 220_000 ? dataUrl : "";
 }
 
 export async function publishCampaign(campaign: GroupCampaign) {
@@ -207,11 +223,19 @@ export async function loadCampaign(id: string): Promise<GroupCampaign | null> {
 
 export async function submitGroupEntry(campaign: GroupCampaign, entry: GroupEntry) {
   await withTimeout(ensureAnonAuth(), 8_000, "auth");
+  const passportEmbed = await compactImage(entry.passportImageDataUrl);
   let passportImageUrl = entry.passportImageUrl ?? "";
   if (entry.passportImageDataUrl) {
-    passportImageUrl =
-      (await uploadDataUrl(campaign.id, entry.passportImageDataUrl, entry.passportFileName ?? "passport.jpg")) ??
-      "";
+    try {
+      passportImageUrl =
+        (await uploadDataUrl(
+          campaign.id,
+          entry.passportImageDataUrl,
+          entry.passportFileName ?? "passport.jpg"
+        )) ?? "";
+    } catch {
+      passportImageUrl = passportImageUrl || "";
+    }
   }
   const payload = {
     kind: "spm-group-entry",
@@ -221,17 +245,24 @@ export async function submitGroupEntry(campaign: GroupCampaign, entry: GroupEntr
     collectKind: campaign.kind,
     name: entry.name,
     phone: entry.phone ?? "",
-    role: entry.role,
+    role: "guest",
     rrn: entry.rrn ?? "",
     passportName: entry.passportName ?? "",
-    passportNo: entry.passportNo ?? "",
+    passportNo: "",
     passportFileName: entry.passportFileName ?? "",
     passportImageUrl,
+    passportImageDataUrl: passportEmbed,
     privacyAgreed: entry.privacyAgreed,
     status: "completed",
   };
-  const docRef = await withTimeout(addDoc(groupEntriesCol(campaign.id), payload), 8_000, "save");
-  return { remoteId: docRef.id, passportImageUrl };
+  try {
+    const docRef = await withTimeout(addDoc(groupEntriesCol(campaign.id), payload), 8_000, "save");
+    return { remoteId: docRef.id, passportImageUrl };
+  } catch {
+    const slim = { ...payload, passportImageDataUrl: passportImageUrl ? "" : payload.passportImageDataUrl };
+    const docRef = await withTimeout(addDoc(groupEntriesCol(campaign.id), slim), 8_000, "save");
+    return { remoteId: docRef.id, passportImageUrl };
+  }
 }
 
 export async function deleteGroupEntry(campaignId: string, entryId: string) {
@@ -288,24 +319,28 @@ export function subscribeGroupEntries(
 
 export function groupEntriesCsv(kind: CollectKind, rows: GroupEntry[]) {
   const cols = ["성명", "연락처"];
-  if (needsRole(kind)) cols.push("구분");
   if (needsRrn(kind)) cols.push("주민등록번호");
-  if (needsPassport(kind)) cols.push("영문성명", "여권번호", "여권사진");
+  if (needsPassport(kind)) cols.push("영문성명", "여권사진");
   cols.push("제출시각");
+  const ordered = [...rows].sort((a, b) => (a.submittedAt ?? "").localeCompare(b.submittedAt ?? ""));
   const lines = [
     cols.join(","),
-    ...rows.map((row) => {
-      const cells = [row.name, row.phone ?? ""];
-      if (needsRole(kind)) cells.push(roleLabel(row.role));
-      if (needsRrn(kind)) cells.push(row.rrn ?? "");
+    ...ordered.map((row) => {
+      const cells = [row.name, excelText(row.phone ?? "")];
+      if (needsRrn(kind)) cells.push(excelText(row.rrn ?? ""));
       if (needsPassport(kind)) {
-        cells.push(row.passportName ?? "", row.passportNo ?? "", row.passportImageUrl ?? "");
+        cells.push(row.passportName ?? "", row.passportImageUrl ?? "");
       }
-      cells.push(row.submittedAt ?? "");
+      cells.push(formatSeoulDateTime(row.submittedAt ?? ""));
       return cells.map(csvCell).join(",");
     }),
   ];
   return `\uFEFF${lines.join("\n")}`;
+}
+
+function excelText(value: string) {
+  if (!value) return "";
+  return `="${value.replaceAll('"', '""')}"`;
 }
 
 function csvCell(value: string) {

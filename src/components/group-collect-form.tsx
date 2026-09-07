@@ -3,14 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  needsPassport,
-  needsRole,
-  needsRrn,
-  submitGroupEntry,
-  type GroupCampaign,
-  type GroupRole,
-} from "@/lib/group-collect";
+import { needsPassport, needsRrn, submitGroupEntry, type GroupCampaign } from "@/lib/group-collect";
 import { fileToJpeg } from "@/lib/image-file";
 import { cn } from "@/lib/utils";
 import { ImagePlus } from "lucide-react";
@@ -31,10 +24,8 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
   const wantPass = needsPassport(campaign.kind);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [role, setRole] = useState<GroupRole>("guest");
   const [rrn, setRrn] = useState("");
   const [passportName, setPassportName] = useState("");
-  const [passportNo, setPassportNo] = useState("");
   const [passportImage, setPassportImage] = useState("");
   const [passportFileName, setPassportFileName] = useState("");
   const [agree, setAgree] = useState(false);
@@ -45,7 +36,7 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
   if (done) {
     return (
       <p className="rounded-xl bg-accent/70 px-4 py-6 text-center text-sm font-medium">
-        제출했습니다. 투어메이커로 전달됩니다.
+        제출했습니다. 투어메이커로 바로 전달됩니다.
       </p>
     );
   }
@@ -81,10 +72,9 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
           await submitGroupEntry(campaign, {
             name: name.trim(),
             phone: phone.trim(),
-            role: needsRole(campaign.kind) ? role : "guest",
+            role: "guest",
             rrn: wantRrn ? rrn.trim() : undefined,
             passportName: wantPass ? passportName.trim() || undefined : undefined,
-            passportNo: wantPass ? passportNo.trim() || undefined : undefined,
             passportImageDataUrl: wantPass ? passportImage : undefined,
             passportFileName: wantPass ? passportFileName : undefined,
             privacyAgreed: true,
@@ -113,33 +103,6 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
           required
         />
       </div>
-      {needsRole(campaign.kind) ? (
-        <div className="space-y-1.5">
-          <Label>구분</Label>
-          <div className="grid grid-cols-2 gap-2">
-            {(
-              [
-                ["guest", "참가자"],
-                ["leader", "인솔"],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                className={cn(
-                  "h-10 rounded-xl border text-sm font-medium",
-                  role === id
-                    ? "border-[color:var(--navy)] bg-accent/70 text-[color:var(--navy)]"
-                    : "bg-card text-muted-foreground"
-                )}
-                onClick={() => setRole(id)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
       {wantRrn ? (
         <div className="space-y-1.5">
           <Label htmlFor="g-rrn">주민등록번호</Label>
@@ -171,7 +134,6 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
                 id="g-pass"
                 type="file"
                 accept="image/*"
-                capture="environment"
                 className="sr-only"
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
@@ -214,10 +176,6 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
               onChange={(e) => setPassportName(e.target.value)}
               placeholder="HONG GILDONG"
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="g-no">여권번호 (보이면)</Label>
-            <Input id="g-no" value={passportNo} onChange={(e) => setPassportNo(e.target.value)} />
           </div>
         </>
       ) : null}
