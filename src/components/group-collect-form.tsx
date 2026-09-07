@@ -18,10 +18,10 @@ import { useEffect, useState } from "react";
 
 function agreeLabel(campaign: GroupCampaign) {
   if (campaign.kind === "passport") {
-    return "여행자 명단 작성을 위해 성명·영문명·생년월일·성별·여권번호·여권만료일·여권사본 수집에 동의합니다.";
+    return "여행자 명단 작성을 위해 성명·연락처·여권사본 수집에 동의합니다.";
   }
   if (campaign.kind === "both") {
-    return "여행자보험 가입과 여행자 명단 작성을 위해 성명·주민등록번호·여권정보 수집에 동의합니다.";
+    return "여행자보험 가입과 여행자 명단 작성을 위해 성명·주민등록번호·여권사본 수집에 동의합니다.";
   }
   return "여행자보험 가입을 위해 성명·주민등록번호·연락처 수집에 동의합니다.";
 }
@@ -32,11 +32,6 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [rrn, setRrn] = useState("");
-  const [birthDate, setBirthDate] = useState("");
-  const [gender, setGender] = useState<"M" | "F" | "">("");
-  const [passportName, setPassportName] = useState("");
-  const [passportNo, setPassportNo] = useState("");
-  const [passportExpiry, setPassportExpiry] = useState("");
   const [passportImage, setPassportImage] = useState("");
   const [passportFileName, setPassportFileName] = useState("");
   const [agree, setAgree] = useState(false);
@@ -73,37 +68,15 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
           setError("주민등록번호를 넣어 주세요.");
           return;
         }
-        const fromRrn = wantRrn ? parseRrnMeta(rrn) : null;
-        const birth = fromRrn?.birthIso || birthDate;
-        const sex = fromRrn?.gender || gender;
         if (wantPass && !passportImage) {
           setError("여권 사진을 넣어 주세요.");
-          return;
-        }
-        if (wantPass && !passportName.trim()) {
-          setError("여권 영문 성명을 넣어 주세요.");
-          return;
-        }
-        if (wantPass && !passportNo.trim()) {
-          setError("여권번호를 넣어 주세요.");
-          return;
-        }
-        if (wantPass && !passportExpiry) {
-          setError("여권 만료일을 넣어 주세요.");
-          return;
-        }
-        if (wantPass && !birth) {
-          setError("생년월일을 넣어 주세요.");
-          return;
-        }
-        if (wantPass && !sex) {
-          setError("성별을 선택해 주세요.");
           return;
         }
         if (!agree) {
           setError("수집 동의에 체크해 주세요.");
           return;
         }
+        const fromRrn = wantRrn ? parseRrnMeta(rrn) : null;
         setSending(true);
         setError("");
         try {
@@ -112,11 +85,8 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
             phone: phone.trim(),
             role: "guest",
             rrn: wantRrn ? rrn.trim() : undefined,
-            birthDate: birth || undefined,
-            gender: sex || undefined,
-            passportName: wantPass ? passportName.trim().toUpperCase() : undefined,
-            passportNo: wantPass ? passportNo.trim().toUpperCase() : undefined,
-            passportExpiry: wantPass ? passportExpiry : undefined,
+            birthDate: fromRrn?.birthIso,
+            gender: fromRrn?.gender,
             nationality: wantPass ? "KOR" : undefined,
             passportImageDataUrl: wantPass ? passportImage : undefined,
             passportFileName: wantPass ? passportFileName : undefined,
@@ -158,129 +128,58 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
             onChange={(e) => setRrn(e.target.value)}
             required
           />
-          {wantPass ? (
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              생년월일과 성별은 주민번호로 명단에 넣습니다.
-            </p>
-          ) : null}
         </div>
       ) : null}
       {wantPass ? (
-        <>
-          <div className="space-y-1.5">
-            <Label htmlFor="g-pass">여권 사진</Label>
-            <label
-              htmlFor="g-pass"
-              className={cn(
-                "flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-4 py-4 text-center",
-                passportImage
-                  ? "border-[color:var(--navy)] bg-white"
-                  : "border-[#c4a15a] bg-[#f3eee4]"
-              )}
-            >
-              <input
-                id="g-pass"
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  try {
-                    setPassportImage(await fileToJpeg(file));
-                    setPassportFileName(file.name);
-                    setError("");
-                  } catch {
-                    setError("여권 사진을 다시 선택해 주세요.");
-                  }
-                }}
-              />
-              {passportImage ? (
-                <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={passportImage} alt="" className="max-h-36 w-full rounded-lg object-contain" />
-                  <span className="text-xs font-medium text-[color:var(--navy)]">
-                    다시 선택{passportFileName ? ` · ${passportFileName}` : ""}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <ImagePlus className="size-7 text-[#c4a15a]" />
-                  <span className="inline-flex h-10 items-center rounded-lg bg-[color:var(--navy)] px-4 text-sm font-semibold text-white">
-                    사진 선택
-                  </span>
-                  <span className="text-xs leading-relaxed text-muted-foreground">
-                    여권 정보면이 잘 보이게 찍어 주세요
-                  </span>
-                </>
-              )}
-            </label>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="g-en">영문명 (NAME)</Label>
-            <Input
-              id="g-en"
-              value={passportName}
-              onChange={(e) => setPassportName(e.target.value)}
-              placeholder="HONG GILDONG"
-              required
+        <div className="space-y-1.5">
+          <Label htmlFor="g-pass">여권 사진</Label>
+          <label
+            htmlFor="g-pass"
+            className={cn(
+              "flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-4 py-4 text-center",
+              passportImage
+                ? "border-[color:var(--navy)] bg-white"
+                : "border-[#c4a15a] bg-[#f3eee4]"
+            )}
+          >
+            <input
+              id="g-pass"
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  setPassportImage(await fileToJpeg(file));
+                  setPassportFileName(file.name);
+                  setError("");
+                } catch {
+                  setError("여권 사진을 다시 선택해 주세요.");
+                }
+              }}
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="g-pno">여권번호</Label>
-            <Input
-              id="g-pno"
-              value={passportNo}
-              onChange={(e) => setPassportNo(e.target.value)}
-              placeholder="M12345678"
-              autoComplete="off"
-              required
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="g-exp">여권만료일</Label>
-            <Input
-              id="g-exp"
-              type="date"
-              value={passportExpiry}
-              onChange={(e) => setPassportExpiry(e.target.value)}
-              required
-            />
-          </div>
-          {!wantRrn ? (
-            <>
-              <div className="space-y-1.5">
-                <Label htmlFor="g-birth">생년월일</Label>
-                <Input
-                  id="g-birth"
-                  type="date"
-                  value={birthDate}
-                  onChange={(e) => setBirthDate(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>성별 (M/F)</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(["M", "F"] as const).map((g) => (
-                    <button
-                      key={g}
-                      type="button"
-                      className={cn(
-                        "rounded-2xl border px-4 py-3 text-left",
-                        gender === g ? "border-[color:var(--navy)] bg-accent/70" : "bg-card"
-                      )}
-                      onClick={() => setGender(g)}
-                    >
-                      <p className="font-semibold">{g}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">{g === "M" ? "남" : "여"}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
-          ) : null}
-        </>
+            {passportImage ? (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={passportImage} alt="" className="max-h-36 w-full rounded-lg object-contain" />
+                <span className="text-xs font-medium text-[color:var(--navy)]">
+                  다시 선택{passportFileName ? ` · ${passportFileName}` : ""}
+                </span>
+              </>
+            ) : (
+              <>
+                <ImagePlus className="size-7 text-[#c4a15a]" />
+                <span className="inline-flex h-10 items-center rounded-lg bg-[color:var(--navy)] px-4 text-sm font-semibold text-white">
+                  사진 선택
+                </span>
+                <span className="text-xs leading-relaxed text-muted-foreground">
+                  여권 정보면이 잘 보이게 찍어 주세요
+                </span>
+              </>
+            )}
+          </label>
+        </div>
       ) : null}
       <label className="flex items-start gap-2 text-sm">
         <input

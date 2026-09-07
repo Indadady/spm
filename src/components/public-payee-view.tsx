@@ -1,6 +1,7 @@
 "use client";
 
 import { PayeeForm } from "@/components/payee-form";
+import { PublicSiteLink } from "@/components/public-site-link";
 import { COMPANY, COMPANY_LOGO } from "@/lib/company";
 import { usePublicPayout } from "@/lib/use-public-payout";
 
@@ -37,6 +38,7 @@ export function PublicPayeeView({ id }: { id: string }) {
         ) : null}
       </header>
       <PayeeForm payout={payout} />
+      <PublicSiteLink />
     </article>
   );
 }

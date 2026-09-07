@@ -57,4 +57,5 @@ export const COMPANY = {
   bank: "신협",
   account: "131-022-382094",
   holder: "주식회사 투어메이커",
+  site: "https://tourmaker.kr",
 };

@@ -1,6 +1,7 @@
 "use client";
 
 import { GroupCollectForm } from "@/components/group-collect-form";
+import { PublicSiteLink } from "@/components/public-site-link";
 import { COMPANY, COMPANY_LOGO } from "@/lib/company";
 import { collectKindLabel } from "@/lib/group-collect";
 import { useGroupCampaign } from "@/lib/use-group-campaign";
@@ -39,6 +40,7 @@ export function PublicGroupView({ id }: { id: string }) {
         </p>
       </header>
       <GroupCollectForm campaign={campaign} />
+      <PublicSiteLink />
     </article>
   );
 }

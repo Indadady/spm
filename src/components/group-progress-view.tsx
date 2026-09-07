@@ -1,5 +1,6 @@
 "use client";
 
+import { PublicSiteLink } from "@/components/public-site-link";
 import { COMPANY, COMPANY_LOGO } from "@/lib/company";
 import { collectKindLabel, needsPassport, needsRrn } from "@/lib/group-collect";
 import { useGroupCampaign } from "@/lib/use-group-campaign";
@@ -68,6 +69,7 @@ export function GroupProgressView({ id }: { id: string }) {
           ))}
         </ul>
       )}
+      <PublicSiteLink />
     </article>
   );
 }

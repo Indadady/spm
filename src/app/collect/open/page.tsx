@@ -1,6 +1,7 @@
 "use client";
 
 import { CopyTextButton } from "@/components/copy-text-button";
+import { DocImage } from "@/components/doc-image";
 import { Button } from "@/components/ui/button";
 import {
   collectKindLabel,
@@ -198,39 +199,31 @@ function CollectOpenBody() {
                     </Button>
                   ) : null}
                 </div>
-                <dl className="mt-2 grid grid-cols-[6.5rem_1fr] gap-y-1 text-sm">
-                  {needsRrn(campaign.kind) ? (
-                    <>
-                      <dt className="text-muted-foreground">주민등록번호</dt>
-                      <dd className="font-medium tabular-nums">{row.rrn || "—"}</dd>
-                    </>
-                  ) : null}
-                  {needsPassport(campaign.kind) ? (
-                    <>
-                      <dt className="text-muted-foreground">영문명</dt>
-                      <dd>{row.passportName || "—"}</dd>
-                      <dt className="text-muted-foreground">생년월일</dt>
-                      <dd className="tabular-nums">
-                        {rosterDate(row.birthDate || (row.rrn ? parseRrnMeta(row.rrn)?.birthIso : "")) || "—"}
-                      </dd>
-                      <dt className="text-muted-foreground">성별</dt>
-                      <dd>{row.gender || parseRrnMeta(row.rrn ?? "")?.gender || "—"}</dd>
-                      <dt className="text-muted-foreground">여권번호</dt>
-                      <dd className="tabular-nums">{row.passportNo || "—"}</dd>
-                      <dt className="text-muted-foreground">여권만료일</dt>
-                      <dd className="tabular-nums">{rosterDate(row.passportExpiry) || "—"}</dd>
-                      <dt className="text-muted-foreground">국적</dt>
-                      <dd>{row.nationality || "KOR"}</dd>
-                    </>
-                  ) : null}
-                </dl>
-                {passSrc ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={passSrc}
-                    alt=""
-                    className="mt-3 max-h-48 w-full rounded-xl border bg-white object-contain"
-                  />
+                {needsRrn(campaign.kind) ? (
+                  <dl className="mt-2 grid grid-cols-[6.5rem_1fr] gap-y-1 text-sm">
+                    <dt className="text-muted-foreground">주민등록번호</dt>
+                    <dd className="font-medium tabular-nums">{row.rrn || "—"}</dd>
+                    {row.birthDate || row.rrn ? (
+                      <>
+                        <dt className="text-muted-foreground">생년월일</dt>
+                        <dd className="tabular-nums">
+                          {rosterDate(row.birthDate || parseRrnMeta(row.rrn ?? "")?.birthIso) || "—"}
+                        </dd>
+                        <dt className="text-muted-foreground">성별</dt>
+                        <dd>{row.gender || parseRrnMeta(row.rrn ?? "")?.gender || "—"}</dd>
+                      </>
+                    ) : null}
+                  </dl>
+                ) : null}
+                {needsPassport(campaign.kind) ? (
+                  <div className="mt-3">
+                    <DocImage
+                      src={passSrc}
+                      label="여권 사진"
+                      empty="여권 사진이 없습니다."
+                      fileName={`${row.name}-여권.jpg`}
+                    />
+                  </div>
                 ) : null}
               </li>
             );

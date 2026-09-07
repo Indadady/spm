@@ -52,7 +52,7 @@ export type GroupEntry = {
 
 export const COLLECT_KINDS: { id: CollectKind; label: string; hint: string }[] = [
   { id: "insurance", label: "여행자보험", hint: "성명·주민번호" },
-  { id: "passport", label: "여권사본", hint: "명단용 영문명·여권번호·만료일" },
+  { id: "passport", label: "여권사본", hint: "여행자 명단용 사진" },
   { id: "both", label: "보험 + 여권", hint: "해외 행사 명단" },
 ];
 
@@ -114,7 +114,7 @@ export function groupNoticeText(title: string, kind: CollectKind) {
   const what =
     kind === "passport" ? "여권사본" : kind === "insurance" ? "여행자보험 자료" : "여행자보험·여권 자료";
   return `${title}
-${what} 입력 부탁드립니다.
+${what} 제출 부탁드립니다.
 각자 아래 링크에서 입력해 주세요. 자료는 투어메이커로 바로 전달됩니다.`;
 }
 
