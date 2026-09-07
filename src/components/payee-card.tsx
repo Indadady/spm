@@ -78,11 +78,7 @@ export function PayeeCard({
           </dl>
         )}
         {payee?.signatureDataUrl ? (
-          <DocImage
-            src={payee.signatureDataUrl}
-            label="서명"
-            fileName={`${payee.name || payout.partnerName}-서명.jpg`}
-          />
+          <DocImage src={payee.signatureDataUrl} label="서명" download={false} />
         ) : null}
         {payee ? (
           <DocImage

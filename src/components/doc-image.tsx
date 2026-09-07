@@ -28,11 +28,13 @@ export function DocImage({
   label,
   empty,
   fileName,
+  download = true,
 }: {
   src?: string;
   label: string;
   empty?: string;
   fileName?: string;
+  download?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -50,7 +52,7 @@ export function DocImage({
     <div>
       <div className="mb-1 flex items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">{label}</p>
-        <div className="flex items-center gap-3">
+        {download ? (
           <button
             type="button"
             disabled={saving}
@@ -66,25 +68,30 @@ export function DocImage({
           >
             {saving ? "받는 중…" : "다운로드"}
           </button>
-          <a
-            href={src}
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs font-medium text-[color:var(--navy)] underline"
-          >
-            크게 보기
-          </a>
-        </div>
+        ) : null}
       </div>
       {failed ? (
-        <a
-          href={src}
-          target="_blank"
-          rel="noreferrer"
-          className="block rounded-xl border px-4 py-5 text-center text-sm font-medium text-[color:var(--navy)] underline"
-        >
-          사진이 안 보이면 여기를 눌러 여세요
-        </a>
+        download ? (
+          <button
+            type="button"
+            disabled={saving}
+            className="block w-full rounded-xl border px-4 py-5 text-center text-sm font-medium text-[color:var(--navy)] underline disabled:opacity-50"
+            onClick={async () => {
+              setSaving(true);
+              try {
+                await saveImage(src, saveAs);
+              } finally {
+                setSaving(false);
+              }
+            }}
+          >
+            {saving ? "받는 중…" : "사진이 안 보이면 다운로드로 받으세요"}
+          </button>
+        ) : (
+          <p className="rounded-xl border px-4 py-5 text-center text-sm text-muted-foreground">
+            사진을 불러오지 못했습니다.
+          </p>
+        )
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
         <img
