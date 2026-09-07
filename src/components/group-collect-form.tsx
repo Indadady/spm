@@ -7,14 +7,16 @@ import {
   needsPassport,
   needsRrn,
   parseRrnMeta,
+  rosterDate,
   submitGroupEntry,
   type GroupCampaign,
 } from "@/lib/group-collect";
 import { fileToJpeg } from "@/lib/image-file";
 import { ensureAnonAuth } from "@/lib/firebase";
+import { scanPassportImage, type PassportScan } from "@/lib/passport-scan";
 import { cn } from "@/lib/utils";
 import { ImagePlus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 function agreeLabel(campaign: GroupCampaign) {
   if (campaign.kind === "passport") {
@@ -34,6 +36,10 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
   const [rrn, setRrn] = useState("");
   const [passportImage, setPassportImage] = useState("");
   const [passportFileName, setPassportFileName] = useState("");
+  const [scan, setScan] = useState<PassportScan | null>(null);
+  const [scanState, setScanState] = useState<"idle" | "reading" | "ok" | "fail">("idle");
+  const scanWait = useRef<Promise<PassportScan | null> | null>(null);
+  const passportFile = useRef<File | null>(null);
   const [agree, setAgree] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
@@ -80,19 +86,27 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
         setSending(true);
         setError("");
         try {
-          await submitGroupEntry(campaign, {
+          const read = wantPass ? scan ?? (await scanWait.current) : null;
+          await submitGroupEntry(
+            campaign,
+            {
             name: name.trim(),
             phone: phone.trim(),
             role: "guest",
             rrn: wantRrn ? rrn.trim() : undefined,
-            birthDate: fromRrn?.birthIso,
-            gender: fromRrn?.gender,
-            nationality: wantPass ? "KOR" : undefined,
+            birthDate: fromRrn?.birthIso || read?.birthDate,
+            gender: fromRrn?.gender || read?.gender,
+            passportName: read?.passportName,
+            passportNo: read?.passportNo,
+            passportExpiry: read?.passportExpiry,
+            nationality: read?.nationality || (wantPass ? "KOR" : undefined),
             passportImageDataUrl: wantPass ? passportImage : undefined,
             passportFileName: wantPass ? passportFileName : undefined,
             privacyAgreed: true,
             submittedAt: new Date().toISOString(),
-          });
+            },
+            wantPass ? passportFile.current ?? undefined : undefined
+          );
           setDone(true);
         } catch {
           setError("보내지 못했습니다. 연결을 확인하고 다시 제출해 주세요.");
@@ -150,11 +164,20 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
               onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
+                setScan(null);
+                setScanState("reading");
+                setError("");
                 try {
+                  passportFile.current = file;
                   setPassportImage(await fileToJpeg(file));
                   setPassportFileName(file.name);
-                  setError("");
+                  const pending = scanPassportImage(file);
+                  scanWait.current = pending;
+                  const hit = await pending;
+                  setScan(hit);
+                  setScanState(hit ? "ok" : "fail");
                 } catch {
+                  setScanState("fail");
                   setError("여권 사진을 다시 선택해 주세요.");
                 }
               }}
@@ -174,11 +197,24 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
                   사진 선택
                 </span>
                 <span className="text-xs leading-relaxed text-muted-foreground">
-                  여권 정보면이 잘 보이게 찍어 주세요
+                  여권 아래 영문 두 줄이 보이게 찍어 주세요
                 </span>
               </>
             )}
           </label>
+          {scanState === "reading" ? (
+            <p className="text-xs text-muted-foreground">여권 정보를 읽는 중…</p>
+          ) : null}
+          {scanState === "ok" && scan ? (
+            <p className="rounded-xl bg-accent/60 px-3 py-2 text-xs leading-relaxed">
+              {scan.passportName} · {scan.passportNo} · {rosterDate(scan.passportExpiry)}
+            </p>
+          ) : null}
+          {scanState === "fail" && passportImage ? (
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              사진 아래 영문 두 줄이 잘리면 번호가 안 들어갑니다. 다시 찍어 주세요.
+            </p>
+          ) : null}
         </div>
       ) : null}
       <label className="flex items-start gap-2 text-sm">
@@ -192,8 +228,8 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
         {agreeLabel(campaign)}
       </label>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      <Button type="submit" className="w-full" disabled={sending}>
-        {sending ? "보내는 중…" : "제출"}
+      <Button type="submit" className="w-full" disabled={sending || scanState === "reading"}>
+        {sending ? "보내는 중…" : scanState === "reading" ? "여권 읽는 중…" : "제출"}
       </Button>
     </form>
   );

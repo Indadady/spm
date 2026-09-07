@@ -21,7 +21,7 @@ async function canvasJpeg(
 function loadImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const el = new Image();
-    const timer = window.setTimeout(() => reject(new Error("이미지를 읽지 못했습니다.")), 8_000);
+    const timer = window.setTimeout(() => reject(new Error("이미지를 읽지 못했습니다.")), 20_000);
     el.onload = () => {
       window.clearTimeout(timer);
       resolve(el);
@@ -44,6 +44,24 @@ export async function fileToJpeg(file: File, max = 640, quality = 0.48): Promise
     jpeg = await canvasJpeg(await loadImage(jpeg), 480, 0.4);
     if (dataUrlBytes(jpeg) <= EMBED_LIMIT) return jpeg;
     return canvasJpeg(await loadImage(jpeg), 360, 0.35);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+export async function fileForDownload(file: File): Promise<File> {
+  const type = file.type.toLowerCase();
+  const keep =
+    (type === "image/jpeg" || type === "image/jpg" || type === "image/png" || type === "image/webp") &&
+    file.size > 0;
+  if (keep) return file;
+  const url = URL.createObjectURL(file);
+  try {
+    const jpeg = await canvasJpeg(await loadImage(url), 4096, 0.95);
+    const res = await fetch(jpeg);
+    const blob = await res.blob();
+    const base = file.name.replace(/\.[^.]+$/, "") || "passport";
+    return new File([blob], `${base}.jpg`, { type: "image/jpeg" });
   } finally {
     URL.revokeObjectURL(url);
   }

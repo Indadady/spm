@@ -11,10 +11,11 @@ import {
   updateDoc,
   type Unsubscribe,
 } from "firebase/firestore";
-import { getDownloadURL, ref, uploadString } from "firebase/storage";
+import { getDownloadURL, ref, uploadBytes, uploadString } from "firebase/storage";
 import { randomKakaoOgSlot } from "./company";
 import { ensureAnonAuth, getFirebase, SURVEY_APP_ID } from "./firebase";
-import { dataUrlBytes } from "./image-file";
+import { dataUrlBytes, fileForDownload } from "./image-file";
+import { buildRosterXlsx, type RosterSheet } from "./roster-xlsx";
 
 export type CollectKind = "insurance" | "passport" | "both";
 export type GroupRole = "guest" | "leader";
@@ -51,13 +52,15 @@ export type GroupEntry = {
 };
 
 export const COLLECT_KINDS: { id: CollectKind; label: string; hint: string }[] = [
-  { id: "insurance", label: "여행자보험", hint: "성명·주민번호" },
-  { id: "passport", label: "여권사본", hint: "여행자 명단용 사진" },
-  { id: "both", label: "보험 + 여권", hint: "해외 행사 명단" },
+  { id: "insurance", label: "여행자보험용", hint: "성명·주민번호" },
+  { id: "both", label: "여권사본 + 보험", hint: "성명·주민번호·여권사진" },
 ];
 
 export function collectKindLabel(kind: CollectKind) {
-  return COLLECT_KINDS.find((k) => k.id === kind)?.label ?? "여행 자료";
+  if (kind === "insurance") return "여행자보험용";
+  if (kind === "both") return "여권사본 + 보험";
+  if (kind === "passport") return "여권사본";
+  return "여행 자료";
 }
 
 export function needsRrn(kind: CollectKind) {
@@ -112,7 +115,7 @@ export function groupWatchPath(id: string, slot?: number) {
 
 export function groupNoticeText(title: string, kind: CollectKind) {
   const what =
-    kind === "passport" ? "여권사본" : kind === "insurance" ? "여행자보험 자료" : "여행자보험·여권 자료";
+    kind === "passport" ? "여권사본" : kind === "insurance" ? "여행자보험 자료" : "여권사본·여행자보험 자료";
   return `${title}
 ${what} 제출 부탁드립니다.
 각자 아래 링크에서 입력해 주세요. 자료는 투어메이커로 바로 전달됩니다.`;
@@ -197,6 +200,23 @@ export function entryFromDoc(
   };
 }
 
+async function uploadPassportFile(campaignId: string, file: File) {
+  const { storage } = getFirebase();
+  if (!storage) return undefined;
+  const ext = (file.name.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "").slice(0, 5) || "jpg";
+  const path = `artifacts/${SURVEY_APP_ID}/public/spm/g/${campaignId}/${Date.now()}-passport.${ext}`;
+  const fileRef = ref(storage, path);
+  await withTimeout(
+    uploadBytes(fileRef, file, {
+      contentType: file.type || "image/jpeg",
+      customMetadata: { originalName: file.name },
+    }),
+    60_000,
+    "upload"
+  );
+  return withTimeout(getDownloadURL(fileRef), 8_000, "url");
+}
+
 async function uploadDataUrl(campaignId: string, dataUrl: string, fileName: string) {
   const { storage } = getFirebase();
   if (!storage) return undefined;
@@ -238,10 +258,26 @@ export async function loadCampaign(id: string): Promise<GroupCampaign | null> {
   return campaignFromDoc(snap.id, snap.data() as Record<string, unknown>);
 }
 
-export async function submitGroupEntry(campaign: GroupCampaign, entry: GroupEntry) {
+export async function submitGroupEntry(campaign: GroupCampaign, entry: GroupEntry, originalFile?: File) {
   await withTimeout(ensureAnonAuth(), 8_000, "auth");
-  const raw = entry.passportImageDataUrl ?? "";
-  const passportEmbed = raw && dataUrlBytes(raw) <= 220_000 ? raw : "";
+  const preview = entry.passportImageDataUrl ?? "";
+  const passportEmbed = preview && dataUrlBytes(preview) <= 220_000 ? preview : "";
+  let passportImageUrl = entry.passportImageUrl ?? "";
+  if (originalFile) {
+    try {
+      const stored = await fileForDownload(originalFile);
+      passportImageUrl = (await uploadPassportFile(campaign.id, stored)) ?? "";
+    } catch {
+      passportImageUrl = "";
+    }
+  }
+  if (!passportImageUrl && preview) {
+    try {
+      passportImageUrl = (await uploadDataUrl(campaign.id, preview, entry.passportFileName ?? "passport.jpg")) ?? "";
+    } catch {
+      passportImageUrl = "";
+    }
+  }
   const payload = {
     kind: "spm-group-entry",
     createdAt: entry.submittedAt ?? new Date().toISOString(),
@@ -259,33 +295,44 @@ export async function submitGroupEntry(campaign: GroupCampaign, entry: GroupEntr
     passportExpiry: entry.passportExpiry ?? "",
     nationality: entry.nationality ?? (needsPassport(campaign.kind) ? "KOR" : ""),
     note: entry.note ?? "",
-    passportFileName: entry.passportFileName ?? "",
-    passportImageUrl: entry.passportImageUrl ?? "",
+    passportFileName: originalFile?.name || entry.passportFileName || "",
+    passportImageUrl,
     passportImageDataUrl: passportEmbed,
     privacyAgreed: entry.privacyAgreed,
     status: "completed",
   };
-  let docRef;
   try {
-    docRef = await withTimeout(addDoc(groupEntriesCol(campaign.id), payload), 8_000, "save");
+    const docRef = await withTimeout(addDoc(groupEntriesCol(campaign.id), payload), 8_000, "save");
+    return { remoteId: docRef.id, passportImageUrl };
   } catch {
     const slim = { ...payload, passportImageDataUrl: "" };
-    docRef = await withTimeout(addDoc(groupEntriesCol(campaign.id), slim), 8_000, "save");
+    const docRef = await withTimeout(addDoc(groupEntriesCol(campaign.id), slim), 8_000, "save");
+    return { remoteId: docRef.id, passportImageUrl };
   }
+}
 
-  if (passportEmbed || raw) {
-    void uploadDataUrl(
-      campaign.id,
-      passportEmbed || raw,
-      entry.passportFileName ?? "passport.jpg"
-    )
-      .then((url) => {
-        if (!url) return;
-        return updateDoc(docRef, { passportImageUrl: url });
-      })
-      .catch(() => {});
-  }
-  return { remoteId: docRef.id, passportImageUrl: payload.passportImageUrl };
+export async function patchGroupEntry(
+  campaignId: string,
+  entryId: string,
+  fields: Partial<
+    Pick<GroupEntry, "passportName" | "passportNo" | "passportExpiry" | "birthDate" | "gender" | "nationality">
+  >
+) {
+  if (!campaignId || !entryId) return;
+  await withTimeout(ensureAnonAuth(), 8_000, "auth");
+  const payload: Record<string, string> = {};
+  if (fields.passportName) payload.passportName = fields.passportName;
+  if (fields.passportNo) payload.passportNo = fields.passportNo;
+  if (fields.passportExpiry) payload.passportExpiry = fields.passportExpiry;
+  if (fields.birthDate) payload.birthDate = fields.birthDate;
+  if (fields.gender) payload.gender = fields.gender;
+  if (fields.nationality) payload.nationality = fields.nationality;
+  if (Object.keys(payload).length === 0) return;
+  await withTimeout(updateDoc(doc(groupEntriesCol(campaignId), entryId), payload), 8_000, "save");
+}
+
+export function rowNeedsPassportScan(row: GroupEntry) {
+  return !row.passportName || !row.passportNo || !row.passportExpiry;
 }
 
 export async function deleteGroupEntry(campaignId: string, entryId: string) {
@@ -340,50 +387,64 @@ export function subscribeGroupEntries(
   };
 }
 
-export function groupEntriesCsv(kind: CollectKind, rows: GroupEntry[]) {
-  const ordered = [...rows].sort((a, b) => (a.submittedAt ?? "").localeCompare(b.submittedAt ?? ""));
-  const overseas = needsPassport(kind);
-  const cols = overseas
-    ? ["순번", "성명", "영문명(NAME)", "생년월일", "성별(M/F)", "여권번호", "여권만료일", "국적", "기타"]
-    : ["순번", "성명", "생년월일", "성별(M/F)", "연락처", "기타"];
-  const lines = [
-    cols.join(","),
-    ...ordered.map((row, i) => {
-      const fromRrn = row.rrn ? parseRrnMeta(row.rrn) : null;
-      const birth = rosterDate(row.birthDate || fromRrn?.birthIso);
-      const gender = row.gender || fromRrn?.gender || "";
-      const cells = overseas
-        ? [
-            String(i + 1),
-            row.name,
-            row.passportName ?? "",
-            birth,
-            gender,
-            excelText(row.passportNo ?? ""),
-            rosterDate(row.passportExpiry),
-            row.nationality || "KOR",
-            row.note ?? "",
-          ]
-        : [
-            String(i + 1),
-            row.name,
-            birth,
-            gender,
-            excelText(row.phone ?? ""),
-            row.note ?? "",
-          ];
-      return cells.map(csvCell).join(",");
-    }),
-  ];
-  return `\uFEFF${lines.join("\n")}`;
+function rosterRows(rows: GroupEntry[]) {
+  return [...rows].sort((a, b) => (a.submittedAt ?? "").localeCompare(b.submittedAt ?? ""));
 }
 
-function excelText(value: string) {
-  if (!value) return "";
-  return `="${value.replaceAll('"', '""')}"`;
+function birthGender(row: GroupEntry) {
+  const fromRrn = row.rrn ? parseRrnMeta(row.rrn) : null;
+  return {
+    birth: rosterDate(fromRrn?.birthIso || row.birthDate),
+    gender: fromRrn?.gender || row.gender || "",
+  };
 }
 
-function csvCell(value: string) {
-  if (/[",\n]/.test(value)) return `"${value.replaceAll('"', '""')}"`;
-  return value;
+export function groupEntriesXlsx(kind: CollectKind, rows: GroupEntry[]) {
+  const ordered = rosterRows(rows);
+  const sheets: RosterSheet[] = [];
+  if (needsPassport(kind)) {
+    sheets.push({
+      name: "여행자명단",
+      headers: ["순번", "성명", "영문명(NAME)", "생년월일", "성별(M/F)", "여권번호", "여권만료일", "국적", "기타"],
+      widths: [8, 12, 24, 14, 12, 16, 14, 10, 22],
+      rows: ordered.map((row, i) => {
+        const { birth, gender } = birthGender(row);
+        return [
+          String(i + 1),
+          row.name,
+          row.passportName ?? "",
+          birth,
+          gender,
+          row.passportNo ?? "",
+          rosterDate(row.passportExpiry),
+          row.nationality || "KOR",
+          row.note ?? "",
+        ];
+      }),
+    });
+  }
+  if (needsRrn(kind)) {
+    sheets.push({
+      name: "여행자명단_국내",
+      headers: ["순번", "성명", "생년월일", "성별(M/F)", "연락처", "기타"],
+      widths: [8, 12, 14, 12, 18, 22],
+      rows: ordered.map((row, i) => {
+        const { birth, gender } = birthGender(row);
+        return [String(i + 1), row.name, birth, gender, row.phone ?? "", row.note ?? ""];
+      }),
+    });
+  }
+  return buildRosterXlsx(sheets);
+}
+
+export function downloadRosterFile(title: string, bytes: Uint8Array) {
+  const blob = new Blob([bytes], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${title.replace(/[\\/:*?"<>|]+/g, "_")}_여행자명단.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
 }

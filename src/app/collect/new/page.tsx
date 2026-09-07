@@ -69,7 +69,7 @@ export default function NewGroupCollectPage() {
         </div>
         <div className="space-y-1.5">
           <Label>받을 자료</Label>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {COLLECT_KINDS.map((item) => (
               <button
                 key={item.id}

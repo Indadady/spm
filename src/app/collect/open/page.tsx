@@ -8,19 +8,24 @@ import {
   deleteAllGroupEntries,
   deleteCampaign,
   deleteGroupEntry,
-  groupEntriesCsv,
+  downloadRosterFile,
+  groupEntriesXlsx,
   groupNoticeText,
   groupSharePath,
   groupWatchPath,
   needsPassport,
   needsRrn,
   parseRrnMeta,
+  patchGroupEntry,
   rosterDate,
+  rowNeedsPassportScan,
+  type GroupEntry,
 } from "@/lib/group-collect";
 import { absoluteUrl } from "@/lib/paths";
 import { useGroupCampaign } from "@/lib/use-group-campaign";
 import { useGroupInbox } from "@/lib/use-group-inbox";
 import { useGroupStore } from "@/lib/group-store";
+import { scanPassportImage } from "@/lib/passport-scan";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
@@ -36,6 +41,7 @@ function CollectOpenBody() {
   const [deletingId, setDeletingId] = useState("");
   const [clearing, setClearing] = useState(false);
   const [error, setError] = useState("");
+  const [exporting, setExporting] = useState("");
 
   useEffect(() => {
     if (!id) return;
@@ -104,19 +110,48 @@ function CollectOpenBody() {
           type="button"
           size="sm"
           variant="outline"
-          disabled={inbox.rows.length === 0}
-          onClick={() => {
-            const csv = groupEntriesCsv(campaign.kind, inbox.rows);
-            const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `${campaign.title}-여행자명단.csv`;
-            a.click();
-            URL.revokeObjectURL(url);
+          disabled={inbox.rows.length === 0 || Boolean(exporting)}
+          onClick={async () => {
+            setError("");
+            const rows: GroupEntry[] = inbox.rows.map((row) => ({ ...row }));
+            if (needsPassport(campaign.kind)) {
+              const pending = rows.filter(
+                (row) => rowNeedsPassportScan(row) && (row.passportImageUrl || row.passportImageDataUrl)
+              );
+              for (let i = 0; i < pending.length; i += 1) {
+                setExporting(`여권 사진 읽는 중 ${i + 1}/${pending.length}`);
+                const row = pending[i];
+                if (!row) continue;
+                const src = row.passportImageUrl || row.passportImageDataUrl;
+                if (!src) continue;
+                const hit = await scanPassportImage(src);
+                if (!hit) continue;
+                row.passportName = hit.passportName;
+                row.passportNo = hit.passportNo;
+                row.passportExpiry = hit.passportExpiry;
+                row.birthDate = row.birthDate || hit.birthDate;
+                row.gender = row.gender || hit.gender;
+                row.nationality = hit.nationality || row.nationality;
+                if (row.remoteId) {
+                  try {
+                    await patchGroupEntry(campaign.id, row.remoteId, hit);
+                  } catch {
+                    /* 엑셀에는 넣고, 저장은 다음에 다시 */
+                  }
+                }
+              }
+            }
+            setExporting("엑셀 만드는 중…");
+            try {
+              downloadRosterFile(campaign.title, groupEntriesXlsx(campaign.kind, rows));
+            } catch {
+              setError("엑셀을 만들지 못했습니다. 다시 시도해 주세요.");
+            } finally {
+              setExporting("");
+            }
           }}
         >
-          명단 양식 CSV
+          {exporting || "표준 명단 엑셀"}
         </Button>
         <Button
           type="button"
@@ -169,6 +204,7 @@ function CollectOpenBody() {
         <ul className="space-y-2">
           {inbox.rows.map((row) => {
             const passSrc = row.passportImageUrl || row.passportImageDataUrl;
+            const passExt = row.passportFileName?.match(/\.[a-zA-Z0-9]+$/)?.[0] || ".jpg";
             return (
               <li key={row.remoteId ?? `${row.name}-${row.submittedAt}`} className="rounded-2xl border bg-card px-4 py-3">
                 <div className="flex items-start justify-between gap-3">
@@ -216,14 +252,32 @@ function CollectOpenBody() {
                   </dl>
                 ) : null}
                 {needsPassport(campaign.kind) ? (
-                  <div className="mt-3">
-                    <DocImage
-                      src={passSrc}
-                      label="여권 사진"
-                      empty="여권 사진이 없습니다."
-                      fileName={`${row.name}-여권.jpg`}
-                    />
-                  </div>
+                  <>
+                    <dl className="mt-2 grid grid-cols-[6.5rem_1fr] gap-y-1 text-sm">
+                      <dt className="text-muted-foreground">영문명</dt>
+                      <dd>{row.passportName || "—"}</dd>
+                      <dt className="text-muted-foreground">여권번호</dt>
+                      <dd className="tabular-nums">{row.passportNo || "—"}</dd>
+                      <dt className="text-muted-foreground">여권만료일</dt>
+                      <dd className="tabular-nums">{rosterDate(row.passportExpiry) || "—"}</dd>
+                      {!needsRrn(campaign.kind) && (row.birthDate || row.gender) ? (
+                        <>
+                          <dt className="text-muted-foreground">생년월일</dt>
+                          <dd className="tabular-nums">{rosterDate(row.birthDate) || "—"}</dd>
+                          <dt className="text-muted-foreground">성별</dt>
+                          <dd>{row.gender || "—"}</dd>
+                        </>
+                      ) : null}
+                    </dl>
+                    <div className="mt-3">
+                      <DocImage
+                        src={passSrc}
+                        label="여권 사진"
+                        empty="여권 사진이 없습니다."
+                        fileName={`${row.name}-여권${passExt}`}
+                      />
+                    </div>
+                  </>
                 ) : null}
               </li>
             );
