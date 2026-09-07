@@ -2,19 +2,23 @@
 
 import { buttonVariants } from "@/components/ui/button";
 import { COMPANY, COMPANY_LOGO } from "@/lib/company";
-import { FileText, LayoutGrid, Plus } from "lucide-react";
+import { ClipboardList, FileText, LayoutGrid, Plus } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const nav = [
-  { href: "/", label: "지급", icon: LayoutGrid },
-  { href: "/ledger", label: "세무 자료", icon: FileText },
+  { href: "/", label: "홈", icon: LayoutGrid },
+  { href: "/collect", label: "여행자", icon: ClipboardList },
+  { href: "/ledger", label: "세무", icon: FileText },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
-  const bare = path.startsWith("/p/");
+  const bare = path.startsWith("/p/") || path.startsWith("/g/");
+  const onCollect = path.startsWith("/collect");
+  const createHref = onCollect ? "/collect/new" : "/payouts/new";
+  const createLabel = onCollect ? "새 링크" : "새 지급";
 
   if (bare) {
     return <div className="min-h-full bg-[#f4f7f6] print:bg-white">{children}</div>;
@@ -29,9 +33,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <img src={COMPANY_LOGO} alt={COMPANY.name} className="h-7 w-auto shrink-0" />
             <span className="min-w-0">
               <span className="block text-[10px] font-semibold tracking-wider text-[color:var(--gold-ink)]">
-                SPM
+                투어메이커
               </span>
-              <span className="block truncate text-sm font-bold leading-tight">스마트파트너 관리</span>
+              <span className="block truncate text-sm font-bold leading-tight">자료모우기</span>
             </span>
           </Link>
           <div className="flex items-center gap-1">
@@ -50,14 +54,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               ))}
             </nav>
             <Link
-              href="/payouts/new"
+              href={createHref}
               className={cn(
                 buttonVariants({ size: "sm" }),
                 "bg-[color:var(--gold)] text-[color:var(--navy)] hover:bg-[color:var(--gold)]/90"
               )}
             >
               <Plus className="size-4" />
-              새 지급
+              {createLabel}
             </Link>
           </div>
         </div>
@@ -75,13 +79,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {item.label}
             </Link>
           ))}
-          <Link
-            href="/payouts/new"
-            className="flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium text-[color:var(--navy)]"
-          >
-            <Plus className="size-4" />
-            새 지급
-          </Link>
         </div>
       </nav>
     </div>

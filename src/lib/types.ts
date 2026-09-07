@@ -114,6 +114,11 @@ export type PayeeProfile = {
   idImageDataUrl?: string;
   idImageUrl?: string;
   idFileName?: string;
+  passportName?: string;
+  passportNo?: string;
+  passportImageDataUrl?: string;
+  passportImageUrl?: string;
+  passportFileName?: string;
   signatureDataUrl?: string;
   privacyAgreed: boolean;
   submittedAt?: string;
@@ -139,6 +144,8 @@ export type Payout = {
   revenueAmount?: number;
   dueDate: string;
   paidDate?: string;
+  collectInsurance?: boolean;
+  collectPassport?: boolean;
   periodStart?: string;
   periodEnd?: string;
   workLines?: string[];

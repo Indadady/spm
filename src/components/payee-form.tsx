@@ -4,6 +4,7 @@ import { SignPad } from "@/components/sign-pad";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { fileToJpeg } from "@/lib/image-file";
 import { submitPayee } from "@/lib/payee-inbox";
 import { payeeMissing } from "@/lib/payout-types";
 import { useStore } from "@/lib/store";
@@ -12,40 +13,97 @@ import { cn } from "@/lib/utils";
 import { ImagePlus } from "lucide-react";
 import { useState } from "react";
 
-async function fileToJpeg(file: File): Promise<string> {
-  const url = URL.createObjectURL(file);
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const el = new Image();
-      el.onload = () => resolve(el);
-      el.onerror = () => reject(new Error("이미지를 읽지 못했습니다."));
-      el.src = url;
-    });
-    const max = 1100;
-    const scale = Math.min(1, max / img.width);
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(img.width * scale));
-    canvas.height = Math.max(1, Math.round(img.height * scale));
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("이미지를 줄이지 못했습니다.");
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.72);
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+function PhotoPick({
+  id,
+  label,
+  hint,
+  value,
+  fileName,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  hint: string;
+  value: string;
+  fileName: string;
+  onChange: (dataUrl: string, fileName: string) => void;
+}) {
+  const [error, setError] = useState("");
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <label
+        htmlFor={id}
+        className={cn(
+          "flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-4 py-4 text-center",
+          value ? "border-[color:var(--navy)] bg-white" : "border-[#c4a15a] bg-[#f3eee4]"
+        )}
+      >
+        <input
+          id={id}
+          type="file"
+          accept="image/*"
+          className="sr-only"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            try {
+              onChange(await fileToJpeg(file), file.name);
+              setError("");
+            } catch {
+              setError("사진을 다시 선택해 주세요.");
+            }
+          }}
+        />
+        {value ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={value} alt="" className="max-h-36 w-full rounded-lg object-contain" />
+            <span className="text-xs font-medium text-[color:var(--navy)]">
+              다시 선택{fileName ? ` · ${fileName}` : ""}
+            </span>
+          </>
+        ) : (
+          <>
+            <ImagePlus className="size-7 text-[#c4a15a]" />
+            <span className="inline-flex h-10 items-center rounded-lg bg-[color:var(--navy)] px-4 text-sm font-semibold text-white">
+              사진 선택
+            </span>
+            <span className="text-xs leading-relaxed text-muted-foreground">{hint}</span>
+          </>
+        )}
+      </label>
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+    </div>
+  );
+}
+
+function agreeText(payout: Payout) {
+  const bits = ["입금 처리"];
+  if (payout.collectInsurance) bits.push("여행자보험 가입");
+  if (payout.collectPassport) bits.push("여행자 명단(여권사본)");
+  return `${bits.join("·")}을 위해 위 정보 수집에 동의합니다.`;
 }
 
 export function PayeeForm({ payout }: { payout: Payout }) {
   const { payeeOf, savePayee } = useStore();
   const existing = payeeOf(payout.id);
+  const wantPass = Boolean(payout.collectPassport);
+  const wantIns = Boolean(payout.collectInsurance);
   const [name, setName] = useState(existing?.name ?? "");
   const [rrn, setRrn] = useState(existing?.rrn ?? "");
   const [phone, setPhone] = useState(existing?.phone ?? "");
   const [bank, setBank] = useState(existing?.bank ?? "");
   const [account, setAccount] = useState(existing?.account ?? "");
   const [holder, setHolder] = useState(existing?.holder ?? "");
-  const [idImage, setIdImage] = useState(existing?.idImageDataUrl ?? "");
+  const [idImage, setIdImage] = useState(existing?.idImageDataUrl ?? existing?.idImageUrl ?? "");
   const [idFileName, setIdFileName] = useState(existing?.idFileName ?? "");
+  const [passportName, setPassportName] = useState(existing?.passportName ?? "");
+  const [passportNo, setPassportNo] = useState(existing?.passportNo ?? "");
+  const [passportImage, setPassportImage] = useState(
+    existing?.passportImageDataUrl ?? existing?.passportImageUrl ?? ""
+  );
+  const [passportFileName, setPassportFileName] = useState(existing?.passportFileName ?? "");
   const [signature, setSignature] = useState(existing?.signatureDataUrl ?? "");
   const [agree, setAgree] = useState(existing?.privacyAgreed ?? false);
   const [error, setError] = useState("");
@@ -55,7 +113,7 @@ export function PayeeForm({ payout }: { payout: Payout }) {
   if (done) {
     return (
       <p className="rounded-xl bg-accent/70 px-4 py-6 text-center text-sm font-medium">
-        제출했습니다.
+        제출했습니다. 투어메이커로 전달됩니다.
       </p>
     );
   }
@@ -74,11 +132,15 @@ export function PayeeForm({ payout }: { payout: Payout }) {
           holder: holder.trim() || name.trim(),
           idImageDataUrl: idImage,
           idFileName,
+          passportName: wantPass ? passportName.trim() || undefined : undefined,
+          passportNo: wantPass ? passportNo.trim() || undefined : undefined,
+          passportImageDataUrl: wantPass ? passportImage : undefined,
+          passportFileName: wantPass ? passportFileName : undefined,
           signatureDataUrl: signature,
           privacyAgreed: agree,
           submittedAt: new Date().toISOString(),
         };
-        const miss = payeeMissing(profile);
+        const miss = payeeMissing(profile, { passport: wantPass });
         if (miss.length) {
           setError(`${miss.join(", ")}을(를) 넣어 주세요.`);
           return;
@@ -89,7 +151,7 @@ export function PayeeForm({ payout }: { payout: Payout }) {
         try {
           await Promise.race([
             submitPayee(payout, profile),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 15_000)),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 25_000)),
           ]);
         } catch {
           /* 이 기기에는 이미 저장됨. 자료함 연결이 느려도 제출은 끝냅니다. */
@@ -114,7 +176,7 @@ export function PayeeForm({ payout }: { payout: Payout }) {
         />
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="rrn">주민등록번호</Label>
+        <Label htmlFor="rrn">{wantIns ? "주민등록번호 (원천징수·여행자보험)" : "주민등록번호"}</Label>
         <Input
           id="rrn"
           inputMode="numeric"
@@ -125,59 +187,45 @@ export function PayeeForm({ payout }: { payout: Payout }) {
           required
         />
       </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="idcard">신분증 사진</Label>
-        <label
-          htmlFor="idcard"
-          className={cn(
-            "flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-4 py-4 text-center",
-            idImage
-              ? "border-[color:var(--navy)] bg-white"
-              : "border-[#c4a15a] bg-[#f3eee4]"
-          )}
-        >
-          <input
-            id="idcard"
-            type="file"
-            accept="image/*"
-            className="sr-only"
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              try {
-                setIdImage(await fileToJpeg(file));
-                setIdFileName(file.name);
-                setError("");
-              } catch {
-                setError("신분증 사진을 다시 선택해 주세요.");
-              }
+      <PhotoPick
+        id="idcard"
+        label="신분증 사진"
+        hint="주민등록증 또는 운전면허증 사진을 올려 주세요"
+        value={idImage}
+        fileName={idFileName}
+        onChange={(dataUrl, file) => {
+          setIdImage(dataUrl);
+          setIdFileName(file);
+        }}
+      />
+      {wantPass ? (
+        <>
+          <PhotoPick
+            id="passport"
+            label="여권사본"
+            hint="여권 정보면이 잘 보이게 찍어 주세요"
+            value={passportImage}
+            fileName={passportFileName}
+            onChange={(dataUrl, file) => {
+              setPassportImage(dataUrl);
+              setPassportFileName(file);
             }}
           />
-          {idImage ? (
-            <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={idImage}
-                alt=""
-                className="max-h-36 w-full rounded-lg object-contain"
-              />
-              <span className="text-xs font-medium text-[color:var(--navy)]">
-                다시 선택{idFileName ? ` · ${idFileName}` : ""}
-              </span>
-            </>
-          ) : (
-            <>
-              <ImagePlus className="size-7 text-[#c4a15a]" />
-              <span className="inline-flex h-10 items-center rounded-lg bg-[color:var(--navy)] px-4 text-sm font-semibold text-white">
-                사진 선택
-              </span>
-              <span className="text-xs leading-relaxed text-muted-foreground">
-                주민등록증 또는 운전면허증 사진을 올려 주세요
-              </span>
-            </>
-          )}
-        </label>
-      </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="pass-en">영문 성명 (여권과 같으면)</Label>
+            <Input
+              id="pass-en"
+              value={passportName}
+              onChange={(e) => setPassportName(e.target.value)}
+              placeholder="HONG GILDONG"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="pass-no">여권번호 (보이면)</Label>
+            <Input id="pass-no" value={passportNo} onChange={(e) => setPassportNo(e.target.value)} />
+          </div>
+        </>
+      ) : null}
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label htmlFor="bank">은행</Label>
@@ -210,7 +258,7 @@ export function PayeeForm({ payout }: { payout: Payout }) {
           onChange={(e) => setAgree(e.target.checked)}
           required
         />
-        입금 처리를 위해 위 정보 수집에 동의합니다.
+        {agreeText(payout)}
       </label>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       <Button type="submit" className="w-full" disabled={sending}>

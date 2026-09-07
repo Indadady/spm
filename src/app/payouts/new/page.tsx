@@ -1,11 +1,13 @@
 "use client";
 
+import { CollectExtras } from "@/components/collect-extras";
 import { GrossAmountField } from "@/components/gross-amount-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { nextCompanyPayDateIso } from "@/lib/format";
+import { publishPayoutMeta } from "@/lib/payout-meta";
 import { useStore } from "@/lib/store";
-import { todaySeoulIso } from "@/lib/format";
 import type { Payout } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -16,18 +18,22 @@ export default function NewPayoutPage() {
   const [partner, setPartner] = useState("");
   const [eventName, setEventName] = useState("");
   const [gross, setGross] = useState(0);
-  const [due, setDue] = useState(todaySeoulIso());
+  const [due, setDue] = useState(nextCompanyPayDateIso());
+  const [collectInsurance, setCollectInsurance] = useState(true);
+  const [collectPassport, setCollectPassport] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">새 지급</h1>
       <p className="text-sm text-muted-foreground">
         세전 금액을 넣으면 3.3% 원천과 이체액이 바로 나옵니다. 받는 사람 화면에는 금액이 보이지
-        않습니다.
+        않습니다. 지급일과 추가로 받을 자료는 여기서 정합니다.
       </p>
       <form
         className="space-y-4"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
           if (!gross) return;
           const name = partner.trim();
@@ -45,12 +51,22 @@ export default function NewPayoutPage() {
             gross,
             taxMethod: "business-3-3",
             dueDate: due,
+            collectInsurance,
+            collectPassport,
             status: "collecting",
             docs: [],
             evidence: [],
             survey: [],
           };
+          setSaving(true);
+          setError("");
           addPayout(payout);
+          try {
+            await publishPayoutMeta(payout);
+          } catch {
+            setError("자료함 연결이 느립니다. 링크는 만들었으니, 상세 화면에서 추가 자료를 다시 켜 주세요.");
+          }
+          setSaving(false);
           router.push(`/payouts/${id}`);
         }}
       >
@@ -71,10 +87,19 @@ export default function NewPayoutPage() {
         <GrossAmountField value={gross} onChange={setGross} taxMethod="business-3-3" required />
         <div className="space-y-1.5">
           <Label htmlFor="due">지급일</Label>
-          <Input id="due" type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+          <Input id="due" type="date" value={due} onChange={(e) => setDue(e.target.value)} required />
         </div>
-        <Button type="submit" className="w-full sm:w-auto">
-          등록하고 자료 링크 만들기
+        <CollectExtras
+          insurance={collectInsurance}
+          passport={collectPassport}
+          onChange={(next) => {
+            setCollectInsurance(next.collectInsurance);
+            setCollectPassport(next.collectPassport);
+          }}
+        />
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        <Button type="submit" className="w-full sm:w-auto" disabled={saving}>
+          {saving ? "만드는 중…" : "등록하고 자료 링크 만들기"}
         </Button>
       </form>
     </div>

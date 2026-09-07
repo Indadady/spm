@@ -122,20 +122,34 @@ export function formatTaxMemo(input: {
   account?: string;
   holder?: string;
   payDate: string;
+  rrn?: string;
+  insurance?: boolean;
+  passportSubmitted?: boolean;
+  passportName?: string;
+  passportNo?: string;
 }) {
   const payLine = [input.bank, input.account, input.holder].filter(Boolean).join(" ");
   const last = payLine
     ? `최종 입금 예정 금액: ${formatWonPlain(input.net)}        ${payLine} 지급일 ${input.payDate}`
     : `최종 입금 예정 금액: ${formatWonPlain(input.net)}        지급일 ${input.payDate}`;
-  return [
+  const lines = [
     `세전 ${formatWonPlain(input.gross)}`,
     `사업소득세 원천징수(3.3%) 적용: ${formatWonPlain(input.withholding)} (1원 단위 절사)`,
     last,
-  ].join("\n");
+  ];
+  if (input.rrn) {
+    lines.push(`주민등록번호: ${input.rrn}${input.insurance ? " (여행자보험)" : ""}`);
+  }
+  if (input.passportSubmitted) {
+    const pass = ["여권사본: 제출", input.passportName, input.passportNo].filter(Boolean);
+    lines.push(pass.join(" · "));
+  }
+  return lines.join("\n");
 }
 
 export function taxMemoFor(payout: Payout, payee?: PayeeProfile) {
   const tax = calcTax({ method: payout.taxMethod, gross: payout.gross, days: payout.days });
+  const passportSubmitted = Boolean(payee?.passportImageUrl || payee?.passportImageDataUrl);
   return formatTaxMemo({
     gross: tax.gross,
     withholding: tax.withholding,
@@ -144,5 +158,10 @@ export function taxMemoFor(payout: Payout, payee?: PayeeProfile) {
     account: payee?.account,
     holder: payee?.holder,
     payDate: formatPayDate(payout.paidDate || payout.dueDate),
+    rrn: payee?.rrn,
+    insurance: Boolean(payout.collectInsurance && payee?.rrn),
+    passportSubmitted,
+    passportName: payee?.passportName,
+    passportNo: payee?.passportNo,
   });
 }

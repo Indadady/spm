@@ -124,23 +124,29 @@ export function typeById(id: PayoutTypeId) {
   return found;
 }
 
-export function payeeMissing(p?: {
-  name?: string;
-  phone?: string;
-  rrn?: string;
-  signatureDataUrl?: string;
-  bank?: string;
-  account?: string;
-  holder?: string;
-  idImageDataUrl?: string;
-  idImageUrl?: string;
-  privacyAgreed?: boolean;
-}) {
+export function payeeMissing(
+  p?: {
+    name?: string;
+    phone?: string;
+    rrn?: string;
+    signatureDataUrl?: string;
+    bank?: string;
+    account?: string;
+    holder?: string;
+    idImageDataUrl?: string;
+    idImageUrl?: string;
+    passportImageDataUrl?: string;
+    passportImageUrl?: string;
+    privacyAgreed?: boolean;
+  },
+  opts?: { passport?: boolean }
+) {
   const miss: string[] = [];
   if (!p?.name?.trim()) miss.push("성명");
   if (!p?.phone?.trim()) miss.push("연락처");
   if (!p?.rrn?.trim()) miss.push("주민등록번호");
   if (!p?.idImageDataUrl && !p?.idImageUrl) miss.push("신분증 사진");
+  if (opts?.passport && !p?.passportImageDataUrl && !p?.passportImageUrl) miss.push("여권사본");
   if (!p?.bank?.trim()) miss.push("은행");
   if (!p?.account?.trim()) miss.push("계좌번호");
   if (!p?.holder?.trim()) miss.push("예금주");

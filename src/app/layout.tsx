@@ -12,8 +12,8 @@ const noto = Noto_Sans_KR({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://indadady.github.io/spm"),
-  title: "SPM 스마트파트너 관리",
-  description: "투어메이커 스마트파트너 관리. 지급 정보와 사업소득 3.3% 원천 자료를 관리합니다.",
+  title: "투어메이커 자료모우기",
+  description: "투어메이커 자료모우기. 스마트파트너 지급 정보와 여행자보험·여권 자료를 링크로 받습니다.",
   openGraph: {
     siteName: "투어메이커",
     locale: "ko_KR",

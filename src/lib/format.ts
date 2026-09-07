@@ -52,3 +52,16 @@ export function todaySeoulIso() {
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
+
+export function payDateIso(payout: { paidDate?: string; dueDate: string }) {
+  return payout.paidDate || payout.dueDate;
+}
+
+/** 관례상 10일 지급. 오늘이 10일 이후면 다음 달 10일. */
+export function nextCompanyPayDateIso(from = todaySeoulIso()) {
+  const [y, m, d] = from.split("-").map(Number);
+  if (!y || !m || !d) return from;
+  if (d <= 10) return `${y}-${String(m).padStart(2, "0")}-10`;
+  const next = m === 12 ? { y: y + 1, m: 1 } : { y, m: m + 1 };
+  return `${next.y}-${String(next.m).padStart(2, "0")}-10`;
+}

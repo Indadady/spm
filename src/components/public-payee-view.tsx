@@ -2,11 +2,10 @@
 
 import { PayeeForm } from "@/components/payee-form";
 import { COMPANY, COMPANY_LOGO } from "@/lib/company";
-import { usePayout, useStore } from "@/lib/store";
+import { usePublicPayout } from "@/lib/use-public-payout";
 
 export function PublicPayeeView({ id }: { id: string }) {
-  const payout = usePayout(id);
-  const { ready } = useStore();
+  const { payout, ready } = usePublicPayout(id);
 
   if (!id || !payout || payout.side !== "out") {
     if (!ready) {
@@ -28,6 +27,14 @@ export function PublicPayeeView({ id }: { id: string }) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={COMPANY_LOGO} alt={COMPANY.name} className="h-8 w-auto" />
         <h1 className="mt-3 text-lg font-bold text-[color:var(--navy)]">입금 정보</h1>
+        {payout.collectInsurance || payout.collectPassport ? (
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+            {[payout.collectInsurance ? "여행자보험" : null, payout.collectPassport ? "여권사본" : null]
+              .filter(Boolean)
+              .join("·")}{" "}
+            자료도 함께 받습니다.
+          </p>
+        ) : null}
       </header>
       <PayeeForm payout={payout} />
     </article>

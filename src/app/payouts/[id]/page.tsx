@@ -1,12 +1,14 @@
 "use client";
 
+import { CollectExtras } from "@/components/collect-extras";
 import { CopyLink } from "@/components/copy-link";
 import { PayeeCard } from "@/components/payee-card";
 import { TaxCard } from "@/components/tax-card";
 import { Button } from "@/components/ui/button";
 import { collectSharePath } from "@/lib/company";
-import { formatPayDate, todaySeoulIso } from "@/lib/format";
+import { formatPayDate, payDateIso } from "@/lib/format";
 import { absoluteUrl } from "@/lib/paths";
+import { publishPayoutMeta } from "@/lib/payout-meta";
 import { usePayout, useStore } from "@/lib/store";
 import { usePayeeInbox } from "@/lib/use-payee-inbox";
 import Link from "next/link";
@@ -16,12 +18,22 @@ import { useEffect, useState } from "react";
 export default function PayoutPage() {
   const { id } = useParams<{ id: string }>();
   const payout = usePayout(id);
-  const { setStatus, ready } = useStore();
+  const { setStatus, updatePayout, ready } = useStore();
   const inbox = usePayeeInbox(id);
   const [collectUrl, setCollectUrl] = useState("");
   useEffect(() => {
     setCollectUrl(absoluteUrl(collectSharePath(id)));
   }, [id]);
+  useEffect(() => {
+    if (!payout || payout.side !== "out") return;
+    void publishPayoutMeta(payout);
+  }, [
+    payout,
+    payout?.id,
+    payout?.collectInsurance,
+    payout?.collectPassport,
+    payout?.dueDate,
+  ]);
 
   if (!payout) {
     return (
@@ -40,7 +52,7 @@ export default function PayoutPage() {
         <h1 className="text-2xl font-bold leading-tight">{payout.partnerName}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {payout.eventName || payout.title}
-          {" · "}지급일 {formatPayDate(payout.paidDate || payout.dueDate)}
+          {" · "}지급일 {formatPayDate(payDateIso(payout))}
           {payout.status === "paid" ? " · 이체 완료" : ""}
         </p>
       </div>
@@ -59,6 +71,18 @@ export default function PayoutPage() {
         </div>
       ) : null}
 
+      {payout.side === "out" ? (
+        <CollectExtras
+          insurance={Boolean(payout.collectInsurance)}
+          passport={Boolean(payout.collectPassport)}
+          onChange={(next) => {
+            const patched = { ...payout, ...next };
+            updatePayout(payout.id, next);
+            void publishPayoutMeta(patched);
+          }}
+        />
+      ) : null}
+
       <TaxCard payout={payout} payee={inbox.payee} />
 
       {payout.side === "out" ? (
@@ -68,7 +92,7 @@ export default function PayoutPage() {
       {payout.side === "out" && payout.status !== "paid" ? (
         <Button
           className="w-full sm:w-auto"
-          onClick={() => setStatus(payout.id, "paid", todaySeoulIso())}
+          onClick={() => setStatus(payout.id, "paid", payDateIso(payout))}
         >
           이체 완료
         </Button>

@@ -1,8 +1,10 @@
-import { maskRrn } from "@/lib/format";
-import type { InboxStatus } from "@/lib/payee-inbox";
-import { payeeReady } from "@/lib/payout-types";
-import type { PayeeProfile, Payout } from "@/lib/types";
+"use client";
+
+import { CopyButton } from "@/components/copy-button";
+import { DocImage } from "@/components/doc-image";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { InboxStatus } from "@/lib/payee-inbox";
+import type { PayeeProfile, Payout } from "@/lib/types";
 
 export function PayeeCard({
   payout,
@@ -13,16 +15,17 @@ export function PayeeCard({
   payee?: PayeeProfile;
   status?: InboxStatus;
 }) {
-  const ready = payeeReady(payee);
   const idSrc = payee?.idImageUrl || payee?.idImageDataUrl;
+  const passSrc = payee?.passportImageUrl || payee?.passportImageDataUrl;
+  const got = Boolean(payee?.name || payee?.bank || payee?.rrn);
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>받는 사람 정보</CardTitle>
         <p className="text-xs text-muted-foreground">
-          {ready
-            ? "제출받은 이체 정보입니다."
+          {got
+            ? "제출받은 자료입니다. 신분증·여권 사진은 아래에서 확인할 수 있습니다."
             : status === "connecting"
               ? "자료함에 연결하는 중…"
               : "링크를 보내 제출을 기다립니다."}
@@ -38,7 +41,16 @@ export function PayeeCard({
             <dt className="text-muted-foreground">이름</dt>
             <dd className="font-medium">{payee.name}</dd>
             <dt className="text-muted-foreground">주민등록번호</dt>
-            <dd className="font-medium tabular-nums">{maskRrn(payee.rrn)}</dd>
+            <dd className="flex flex-wrap items-center gap-2 font-medium tabular-nums">
+              <span>{payee.rrn || "—"}</span>
+              {payee.rrn ? <CopyButton text={payee.rrn} label="복사" /> : null}
+            </dd>
+            {payout.collectInsurance ? (
+              <>
+                <dt className="text-muted-foreground">여행자보험</dt>
+                <dd>{payee.rrn ? "주민번호 제출" : "미제출"}</dd>
+              </>
+            ) : null}
             {payee.phone ? (
               <>
                 <dt className="text-muted-foreground">휴대전화</dt>
@@ -51,26 +63,32 @@ export function PayeeCard({
             <dd className="tabular-nums">{payee.account}</dd>
             <dt className="text-muted-foreground">예금주</dt>
             <dd>{payee.holder}</dd>
+            {payee.passportName ? (
+              <>
+                <dt className="text-muted-foreground">영문 성명</dt>
+                <dd>{payee.passportName}</dd>
+              </>
+            ) : null}
+            {payee.passportNo ? (
+              <>
+                <dt className="text-muted-foreground">여권번호</dt>
+                <dd className="tabular-nums">{payee.passportNo}</dd>
+              </>
+            ) : null}
           </dl>
         )}
         {payee?.signatureDataUrl ? (
-          <div>
-            <p className="mb-1 text-xs text-muted-foreground">서명</p>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={payee.signatureDataUrl}
-              alt="서명"
-              className="max-h-28 w-full rounded-xl border bg-white object-contain"
-            />
-          </div>
+          <DocImage src={payee.signatureDataUrl} label="서명" />
         ) : null}
-        {idSrc ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+        {payee ? (
+          <DocImage
             src={idSrc}
-            alt="신분증"
-            className="max-h-56 w-full rounded-xl border bg-white object-contain"
+            label="신분증 사본"
+            empty="신분증 사본이 아직 없습니다. 같은 링크를 다시 보내 사진을 받으면 여기에 보입니다."
           />
+        ) : null}
+        {payout.collectPassport || passSrc ? (
+          <DocImage src={passSrc} label="여권사본" empty="여권사본이 아직 없습니다." />
         ) : null}
       </CardContent>
     </Card>
