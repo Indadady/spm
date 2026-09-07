@@ -8,13 +8,13 @@ import {
   onSnapshot,
   query,
   setDoc,
+  updateDoc,
   type Unsubscribe,
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadString } from "firebase/storage";
 import { randomKakaoOgSlot } from "./company";
 import { ensureAnonAuth, getFirebase, SURVEY_APP_ID } from "./firebase";
-import { formatSeoulDateTime } from "./format";
-import { dataUrlBytes, shrinkDataUrl } from "./image-file";
+import { dataUrlBytes } from "./image-file";
 
 export type CollectKind = "insurance" | "passport" | "both";
 export type GroupRole = "guest" | "leader";
@@ -34,8 +34,13 @@ export type GroupEntry = {
   phone?: string;
   role: GroupRole;
   rrn?: string;
+  birthDate?: string;
+  gender?: "M" | "F" | "";
   passportName?: string;
   passportNo?: string;
+  passportExpiry?: string;
+  nationality?: string;
+  note?: string;
   passportImageDataUrl?: string;
   passportImageUrl?: string;
   passportFileName?: string;
@@ -47,8 +52,8 @@ export type GroupEntry = {
 
 export const COLLECT_KINDS: { id: CollectKind; label: string; hint: string }[] = [
   { id: "insurance", label: "여행자보험", hint: "성명·주민번호" },
-  { id: "passport", label: "여권사본", hint: "여행자 명단용 사진" },
-  { id: "both", label: "보험 + 여권", hint: "해외 행사" },
+  { id: "passport", label: "여권사본", hint: "명단용 영문명·여권번호·만료일" },
+  { id: "both", label: "보험 + 여권", hint: "해외 행사 명단" },
 ];
 
 export function collectKindLabel(kind: CollectKind) {
@@ -61,6 +66,31 @@ export function needsRrn(kind: CollectKind) {
 
 export function needsPassport(kind: CollectKind) {
   return kind === "passport" || kind === "both";
+}
+
+export function parseRrnMeta(rrn: string): { birthIso: string; gender: "M" | "F" } | null {
+  const d = rrn.replace(/\D/g, "");
+  if (d.length < 7) return null;
+  const yy = Number(d.slice(0, 2));
+  const mm = Number(d.slice(2, 4));
+  const dd = Number(d.slice(4, 6));
+  if (!mm || mm > 12 || !dd || dd > 31) return null;
+  const g = d[6];
+  let century = 1900;
+  if ("3478".includes(g)) century = 2000;
+  else if (g === "9" || g === "0") century = 1800;
+  const gender: "M" | "F" = "13579".includes(g) ? "M" : "F";
+  return {
+    birthIso: `${century + yy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`,
+    gender,
+  };
+}
+
+export function rosterDate(iso?: string) {
+  if (!iso) return "";
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}.${m[2]}.${m[3]}`;
+  return iso.replaceAll("-", ".");
 }
 
 export function newGroupId() {
@@ -150,8 +180,13 @@ export function entryFromDoc(
     phone: data.phone ? String(data.phone) : undefined,
     role: data.role === "leader" ? "leader" : "guest",
     rrn: data.rrn ? String(data.rrn) : undefined,
+    birthDate: data.birthDate ? String(data.birthDate) : undefined,
+    gender: data.gender === "M" || data.gender === "F" ? data.gender : undefined,
     passportName: data.passportName ? String(data.passportName) : undefined,
     passportNo: data.passportNo ? String(data.passportNo) : undefined,
+    passportExpiry: data.passportExpiry ? String(data.passportExpiry) : undefined,
+    nationality: data.nationality ? String(data.nationality) : undefined,
+    note: data.note ? String(data.note) : undefined,
     passportImageUrl: data.passportImageUrl ? String(data.passportImageUrl) : undefined,
     passportImageDataUrl: data.passportImageDataUrl ? String(data.passportImageDataUrl) : undefined,
     passportFileName: data.passportFileName ? String(data.passportFileName) : undefined,
@@ -177,24 +212,6 @@ async function uploadDataUrl(campaignId: string, dataUrl: string, fileName: stri
     "upload"
   );
   return withTimeout(getDownloadURL(fileRef), 8_000, "url");
-}
-
-async function compactImage(dataUrl?: string) {
-  if (!dataUrl) return "";
-  const steps: [number, number][] = [
-    [800, 0.52],
-    [560, 0.42],
-    [400, 0.35],
-  ];
-  for (const [max, quality] of steps) {
-    try {
-      const small = await shrinkDataUrl(dataUrl, max, quality);
-      if (dataUrlBytes(small) <= 220_000) return small;
-    } catch {
-      /* 다음 크기로 다시 줄입니다. */
-    }
-  }
-  return dataUrlBytes(dataUrl) <= 220_000 ? dataUrl : "";
 }
 
 export async function publishCampaign(campaign: GroupCampaign) {
@@ -223,20 +240,8 @@ export async function loadCampaign(id: string): Promise<GroupCampaign | null> {
 
 export async function submitGroupEntry(campaign: GroupCampaign, entry: GroupEntry) {
   await withTimeout(ensureAnonAuth(), 8_000, "auth");
-  const passportEmbed = await compactImage(entry.passportImageDataUrl);
-  let passportImageUrl = entry.passportImageUrl ?? "";
-  if (entry.passportImageDataUrl) {
-    try {
-      passportImageUrl =
-        (await uploadDataUrl(
-          campaign.id,
-          entry.passportImageDataUrl,
-          entry.passportFileName ?? "passport.jpg"
-        )) ?? "";
-    } catch {
-      passportImageUrl = passportImageUrl || "";
-    }
-  }
+  const raw = entry.passportImageDataUrl ?? "";
+  const passportEmbed = raw && dataUrlBytes(raw) <= 220_000 ? raw : "";
   const payload = {
     kind: "spm-group-entry",
     createdAt: entry.submittedAt ?? new Date().toISOString(),
@@ -247,22 +252,40 @@ export async function submitGroupEntry(campaign: GroupCampaign, entry: GroupEntr
     phone: entry.phone ?? "",
     role: "guest",
     rrn: entry.rrn ?? "",
+    birthDate: entry.birthDate ?? "",
+    gender: entry.gender ?? "",
     passportName: entry.passportName ?? "",
-    passportNo: "",
+    passportNo: entry.passportNo ?? "",
+    passportExpiry: entry.passportExpiry ?? "",
+    nationality: entry.nationality ?? (needsPassport(campaign.kind) ? "KOR" : ""),
+    note: entry.note ?? "",
     passportFileName: entry.passportFileName ?? "",
-    passportImageUrl,
+    passportImageUrl: entry.passportImageUrl ?? "",
     passportImageDataUrl: passportEmbed,
     privacyAgreed: entry.privacyAgreed,
     status: "completed",
   };
+  let docRef;
   try {
-    const docRef = await withTimeout(addDoc(groupEntriesCol(campaign.id), payload), 8_000, "save");
-    return { remoteId: docRef.id, passportImageUrl };
+    docRef = await withTimeout(addDoc(groupEntriesCol(campaign.id), payload), 8_000, "save");
   } catch {
-    const slim = { ...payload, passportImageDataUrl: passportImageUrl ? "" : payload.passportImageDataUrl };
-    const docRef = await withTimeout(addDoc(groupEntriesCol(campaign.id), slim), 8_000, "save");
-    return { remoteId: docRef.id, passportImageUrl };
+    const slim = { ...payload, passportImageDataUrl: "" };
+    docRef = await withTimeout(addDoc(groupEntriesCol(campaign.id), slim), 8_000, "save");
   }
+
+  if (passportEmbed || raw) {
+    void uploadDataUrl(
+      campaign.id,
+      passportEmbed || raw,
+      entry.passportFileName ?? "passport.jpg"
+    )
+      .then((url) => {
+        if (!url) return;
+        return updateDoc(docRef, { passportImageUrl: url });
+      })
+      .catch(() => {});
+  }
+  return { remoteId: docRef.id, passportImageUrl: payload.passportImageUrl };
 }
 
 export async function deleteGroupEntry(campaignId: string, entryId: string) {
@@ -318,20 +341,37 @@ export function subscribeGroupEntries(
 }
 
 export function groupEntriesCsv(kind: CollectKind, rows: GroupEntry[]) {
-  const cols = ["성명", "연락처"];
-  if (needsRrn(kind)) cols.push("주민등록번호");
-  if (needsPassport(kind)) cols.push("영문성명", "여권사진");
-  cols.push("제출시각");
   const ordered = [...rows].sort((a, b) => (a.submittedAt ?? "").localeCompare(b.submittedAt ?? ""));
+  const overseas = needsPassport(kind);
+  const cols = overseas
+    ? ["순번", "성명", "영문명(NAME)", "생년월일", "성별(M/F)", "여권번호", "여권만료일", "국적", "기타"]
+    : ["순번", "성명", "생년월일", "성별(M/F)", "연락처", "기타"];
   const lines = [
     cols.join(","),
-    ...ordered.map((row) => {
-      const cells = [row.name, excelText(row.phone ?? "")];
-      if (needsRrn(kind)) cells.push(excelText(row.rrn ?? ""));
-      if (needsPassport(kind)) {
-        cells.push(row.passportName ?? "", row.passportImageUrl ?? "");
-      }
-      cells.push(formatSeoulDateTime(row.submittedAt ?? ""));
+    ...ordered.map((row, i) => {
+      const fromRrn = row.rrn ? parseRrnMeta(row.rrn) : null;
+      const birth = rosterDate(row.birthDate || fromRrn?.birthIso);
+      const gender = row.gender || fromRrn?.gender || "";
+      const cells = overseas
+        ? [
+            String(i + 1),
+            row.name,
+            row.passportName ?? "",
+            birth,
+            gender,
+            excelText(row.passportNo ?? ""),
+            rosterDate(row.passportExpiry),
+            row.nationality || "KOR",
+            row.note ?? "",
+          ]
+        : [
+            String(i + 1),
+            row.name,
+            birth,
+            gender,
+            excelText(row.phone ?? ""),
+            row.note ?? "",
+          ];
       return cells.map(csvCell).join(",");
     }),
   ];

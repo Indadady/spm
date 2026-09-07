@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, setDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, setDoc } from "firebase/firestore";
 import { ensureAnonAuth, getFirebase, SURVEY_APP_ID } from "./firebase";
 import type { Payout } from "./types";
 
@@ -101,4 +101,10 @@ export async function loadPayoutMeta(id: string): Promise<PayoutMeta | null> {
     collectInsurance: Boolean(data.collectInsurance),
     collectPassport: Boolean(data.collectPassport),
   };
+}
+
+export async function deletePayoutMeta(id: string) {
+  if (!id) return;
+  await withTimeout(ensureAnonAuth(), 8_000, "auth");
+  await withTimeout(deleteDoc(doc(payoutMetaCol(), id)), 8_000, "delete");
 }

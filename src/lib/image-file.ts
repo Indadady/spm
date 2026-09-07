@@ -21,16 +21,29 @@ async function canvasJpeg(
 function loadImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const el = new Image();
-    el.onload = () => resolve(el);
-    el.onerror = () => reject(new Error("이미지를 읽지 못했습니다."));
+    const timer = window.setTimeout(() => reject(new Error("이미지를 읽지 못했습니다.")), 8_000);
+    el.onload = () => {
+      window.clearTimeout(timer);
+      resolve(el);
+    };
+    el.onerror = () => {
+      window.clearTimeout(timer);
+      reject(new Error("이미지를 읽지 못했습니다."));
+    };
     el.src = src;
   });
 }
 
-export async function fileToJpeg(file: File, max = 1100, quality = 0.72): Promise<string> {
+const EMBED_LIMIT = 220_000;
+
+export async function fileToJpeg(file: File, max = 640, quality = 0.48): Promise<string> {
   const url = URL.createObjectURL(file);
   try {
-    return await canvasJpeg(await loadImage(url), max, quality);
+    let jpeg = await canvasJpeg(await loadImage(url), max, quality);
+    if (dataUrlBytes(jpeg) <= EMBED_LIMIT) return jpeg;
+    jpeg = await canvasJpeg(await loadImage(jpeg), 480, 0.4);
+    if (dataUrlBytes(jpeg) <= EMBED_LIMIT) return jpeg;
+    return canvasJpeg(await loadImage(jpeg), 360, 0.35);
   } finally {
     URL.revokeObjectURL(url);
   }

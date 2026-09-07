@@ -208,13 +208,13 @@ export const SEED_PAYOUTS: Payout[] = [
     gross: 2_000_000,
     taxMethod: "business-3-3",
     dueDate: "2026-09-10",
-    collectInsurance: true,
-    collectPassport: true,
+    collectInsurance: false,
+    collectPassport: false,
     periodStart: "2026-09-03",
     periodEnd: "2026-09-04",
     workLines: ["동굴 지질강의", "용연동굴 · 고씨동굴 · 백룡동굴 현장답사"],
     status: "collecting",
-    memo: "투어메이커와 별도 계약을 맺은 강사가 아닙니다. 이재명이 수배했고, 발주처(태백고생대자연사박물관) 견적 강사비 2,000,000원을 그대로 지출합니다. 이체용 성명·주민번호·신분증·계좌와 함께 여행자보험·여권사본도 받을 수 있습니다.",
+    memo: "투어메이커와 별도 계약을 맺은 강사가 아닙니다. 이재명이 수배했고, 발주처(태백고생대자연사박물관) 견적 강사비 2,000,000원을 그대로 지출합니다. 이체용 성명·주민번호·신분증·계좌를 받습니다.",
     docs: [
       {
         id: "d-guidebook",

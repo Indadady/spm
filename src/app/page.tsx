@@ -2,19 +2,27 @@
 
 import { CopyLink } from "@/components/copy-link";
 import { GroupCopyLink } from "@/components/group-copy-link";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { wipePayoutRemote } from "@/lib/delete-payout";
 import { formatPayDate, formatWon } from "@/lib/format";
-import { collectKindLabel } from "@/lib/group-collect";
+import { collectKindLabel, deleteCampaign } from "@/lib/group-collect";
 import { useGroupStore } from "@/lib/group-store";
+import { campaignWhen, payoutWhen, recentSlice } from "@/lib/recent";
 import { useStore } from "@/lib/store";
 import { calcTax } from "@/lib/tax";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import { useMemo, useState } from "react";
 
 export default function HomePage() {
-  const { payouts, ready, payeeOf } = useStore();
-  const { campaigns, ready: groupReady } = useGroupStore();
+  const { payouts, ready, payeeOf, removePayout } = useStore();
+  const { campaigns, ready: groupReady, removeCampaign } = useGroupStore();
   const outgoing = payouts.filter((p) => p.side === "out");
+  const payoutsShown = useMemo(() => recentSlice(outgoing, payoutWhen), [outgoing]);
+  const campsShown = useMemo(() => recentSlice(campaigns, campaignWhen), [campaigns]);
+  const [deletingId, setDeletingId] = useState("");
+  const [error, setError] = useState("");
+  const busy = Boolean(deletingId);
 
   return (
     <div className="space-y-8">
@@ -22,9 +30,16 @@ export default function HomePage() {
         <h1 className="text-2xl font-bold tracking-tight">자료모우기</h1>
         <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
           심플한 링크를 보내 자료를 받습니다. 스마트파트너 지급과 여행자 보험·여권을 한곳에서
-          모읍니다.
+          모읍니다. 홈에는 최근 5건만 두고, 지난 자료는 보관함에서 봅니다.
         </p>
+        <div className="mt-3">
+          <Link href="/archive" className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>
+            보관함
+          </Link>
+        </div>
       </section>
+
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       <section className="space-y-3">
         <div className="flex items-end justify-between gap-3">
@@ -41,14 +56,15 @@ export default function HomePage() {
 
         {!ready ? (
           <p className="text-sm text-muted-foreground">불러오는 중…</p>
-        ) : outgoing.length === 0 ? (
+        ) : payoutsShown.total === 0 ? (
           <p className="text-sm text-muted-foreground">아직 지급 건이 없습니다.</p>
         ) : (
           <ul className="space-y-2">
-            {outgoing.map((p) => {
+            {payoutsShown.recent.map((p) => {
               const tax = calcTax({ method: p.taxMethod, gross: p.gross });
               const payee = payeeOf(p.id);
               const got = Boolean(payee?.name && payee?.bank && payee?.account);
+              const key = `payout:${p.id}`;
               return (
                 <li key={p.id}>
                   <Link
@@ -73,16 +89,45 @@ export default function HomePage() {
                       지급일 {formatPayDate(p.paidDate || p.dueDate)}
                     </p>
                   </Link>
-                  {p.status !== "paid" ? (
-                    <div className="mt-1 flex justify-end">
+                  <div className="mt-1 flex justify-end gap-2">
+                    {p.status !== "paid" ? (
                       <CopyLink payoutId={p.id} label="자료 링크 복사" />
-                    </div>
-                  ) : null}
+                    ) : null}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      disabled={busy}
+                      onClick={async () => {
+                        if (!window.confirm(`${p.partnerName} 자료와 링크를 삭제할까요? 되돌릴 수 없습니다.`))
+                          return;
+                        setDeletingId(key);
+                        setError("");
+                        try {
+                          await wipePayoutRemote(p.id);
+                          removePayout(p.id);
+                        } catch {
+                          setError("지우지 못했습니다. 연결을 확인하고 다시 시도해 주세요.");
+                        } finally {
+                          setDeletingId("");
+                        }
+                      }}
+                    >
+                      {deletingId === key ? "지우는 중…" : "삭제"}
+                    </Button>
+                  </div>
                 </li>
               );
             })}
           </ul>
         )}
+        {payoutsShown.rest.length > 0 ? (
+          <p className="text-right text-xs">
+            <Link href="/archive" className="underline">
+              지난 지급 {payoutsShown.rest.length}건 보관함
+            </Link>
+          </p>
+        ) : null}
       </section>
 
       <section className="space-y-3">
@@ -100,32 +145,64 @@ export default function HomePage() {
 
         {!groupReady ? (
           <p className="text-sm text-muted-foreground">불러오는 중…</p>
-        ) : campaigns.length === 0 ? (
+        ) : campsShown.total === 0 ? (
           <p className="rounded-2xl border bg-card px-4 py-3 text-sm leading-relaxed text-muted-foreground">
             아직 여행자 링크가 없습니다. 행사 담당자에게 보낼 링크를 만들면, 참가자가 주민번호나
             여권사진을 직접 넣습니다.
           </p>
         ) : (
           <ul className="space-y-2">
-            {campaigns.map((c) => (
-              <li key={c.id}>
-                <Link
-                  href={`/collect/open/?id=${encodeURIComponent(c.id)}`}
-                  className="block rounded-2xl border bg-card px-4 py-3"
-                >
-                  <p className="font-semibold">{c.title}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {collectKindLabel(c.kind)}
-                    {c.expectedCount ? ` · 예상 ${c.expectedCount}명` : ""}
-                  </p>
-                </Link>
-                <div className="mt-1 flex justify-end">
-                  <GroupCopyLink campaignId={c.id} ogSlot={c.ogSlot} label="자료 링크 복사" />
-                </div>
-              </li>
-            ))}
+            {campsShown.recent.map((c) => {
+              const key = `group:${c.id}`;
+              return (
+                <li key={c.id}>
+                  <Link
+                    href={`/collect/open/?id=${encodeURIComponent(c.id)}`}
+                    className="block rounded-2xl border bg-card px-4 py-3"
+                  >
+                    <p className="font-semibold">{c.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {collectKindLabel(c.kind)}
+                      {c.expectedCount ? ` · 예상 ${c.expectedCount}명` : ""}
+                    </p>
+                  </Link>
+                  <div className="mt-1 flex justify-end gap-2">
+                    <GroupCopyLink campaignId={c.id} ogSlot={c.ogSlot} label="자료 링크 복사" />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      disabled={busy}
+                      onClick={async () => {
+                        if (!window.confirm(`${c.title} 링크와 받은 자료를 삭제할까요? 되돌릴 수 없습니다.`))
+                          return;
+                        setDeletingId(key);
+                        setError("");
+                        try {
+                          await deleteCampaign(c.id);
+                          removeCampaign(c.id);
+                        } catch {
+                          setError("지우지 못했습니다. 연결을 확인하고 다시 시도해 주세요.");
+                        } finally {
+                          setDeletingId("");
+                        }
+                      }}
+                    >
+                      {deletingId === key ? "지우는 중…" : "삭제"}
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
+        {campsShown.rest.length > 0 ? (
+          <p className="text-right text-xs">
+            <Link href="/archive" className="underline">
+              지난 여행자 자료 {campsShown.rest.length}건 보관함
+            </Link>
+          </p>
+        ) : null}
       </section>
     </div>
   );

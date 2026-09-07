@@ -2,7 +2,7 @@
 
 import { buttonVariants } from "@/components/ui/button";
 import { COMPANY, COMPANY_LOGO } from "@/lib/company";
-import { ClipboardList, FileText, LayoutGrid, Plus } from "lucide-react";
+import { Archive, ClipboardList, FileText, LayoutGrid, Plus } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -11,6 +11,7 @@ const nav = [
   { href: "/", label: "홈", icon: LayoutGrid },
   { href: "/collect", label: "여행자", icon: ClipboardList },
   { href: "/ledger", label: "세무", icon: FileText },
+  { href: "/archive", label: "보관함", icon: Archive },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -68,7 +69,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-5 pb-24 sm:pb-8">{children}</main>
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-card/95 backdrop-blur sm:hidden">
-        <div className="grid grid-cols-3">
+        <div className="grid grid-cols-4">
           {nav.map((item) => (
             <Link
               key={item.href}

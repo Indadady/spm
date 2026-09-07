@@ -25,7 +25,7 @@ export function PayeeCard({
         <CardTitle>받는 사람 정보</CardTitle>
         <p className="text-xs text-muted-foreground">
           {got
-            ? "제출받은 자료입니다. 신분증·여권 사진은 아래에서 확인할 수 있습니다."
+            ? "제출받은 자료입니다. 신분증 사진은 아래에서 확인할 수 있습니다."
             : status === "connecting"
               ? "자료함에 연결하는 중…"
               : "링크를 보내 제출을 기다립니다."}

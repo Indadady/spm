@@ -33,13 +33,9 @@ export function usePublicPayout(id: string) {
   }, [id]);
 
   const payout = stored
-    ? {
-        ...stored,
-        collectInsurance: meta?.collectInsurance ?? stored.collectInsurance,
-        collectPassport: meta?.collectPassport ?? stored.collectPassport,
-      }
+    ? { ...stored, collectInsurance: false, collectPassport: false }
     : meta
-      ? payoutFromMeta(meta)
+      ? { ...payoutFromMeta(meta), collectInsurance: false, collectPassport: false }
       : undefined;
 
   return { payout, ready: ready && metaTried };

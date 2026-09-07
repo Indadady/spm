@@ -3,18 +3,25 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { needsPassport, needsRrn, submitGroupEntry, type GroupCampaign } from "@/lib/group-collect";
+import {
+  needsPassport,
+  needsRrn,
+  parseRrnMeta,
+  submitGroupEntry,
+  type GroupCampaign,
+} from "@/lib/group-collect";
 import { fileToJpeg } from "@/lib/image-file";
+import { ensureAnonAuth } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import { ImagePlus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 function agreeLabel(campaign: GroupCampaign) {
   if (campaign.kind === "passport") {
-    return "여행자 명단 작성을 위해 여권사본 수집에 동의합니다.";
+    return "여행자 명단 작성을 위해 성명·영문명·생년월일·성별·여권번호·여권만료일·여권사본 수집에 동의합니다.";
   }
   if (campaign.kind === "both") {
-    return "여행자보험 가입과 여행자 명단 작성을 위해 성명·주민등록번호·여권사본 수집에 동의합니다.";
+    return "여행자보험 가입과 여행자 명단 작성을 위해 성명·주민등록번호·여권정보 수집에 동의합니다.";
   }
   return "여행자보험 가입을 위해 성명·주민등록번호·연락처 수집에 동의합니다.";
 }
@@ -25,13 +32,21 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [rrn, setRrn] = useState("");
+  const [birthDate, setBirthDate] = useState("");
+  const [gender, setGender] = useState<"M" | "F" | "">("");
   const [passportName, setPassportName] = useState("");
+  const [passportNo, setPassportNo] = useState("");
+  const [passportExpiry, setPassportExpiry] = useState("");
   const [passportImage, setPassportImage] = useState("");
   const [passportFileName, setPassportFileName] = useState("");
   const [agree, setAgree] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
   const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    void ensureAnonAuth().catch(() => {});
+  }, []);
 
   if (done) {
     return (
@@ -58,8 +73,31 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
           setError("주민등록번호를 넣어 주세요.");
           return;
         }
+        const fromRrn = wantRrn ? parseRrnMeta(rrn) : null;
+        const birth = fromRrn?.birthIso || birthDate;
+        const sex = fromRrn?.gender || gender;
         if (wantPass && !passportImage) {
           setError("여권 사진을 넣어 주세요.");
+          return;
+        }
+        if (wantPass && !passportName.trim()) {
+          setError("여권 영문 성명을 넣어 주세요.");
+          return;
+        }
+        if (wantPass && !passportNo.trim()) {
+          setError("여권번호를 넣어 주세요.");
+          return;
+        }
+        if (wantPass && !passportExpiry) {
+          setError("여권 만료일을 넣어 주세요.");
+          return;
+        }
+        if (wantPass && !birth) {
+          setError("생년월일을 넣어 주세요.");
+          return;
+        }
+        if (wantPass && !sex) {
+          setError("성별을 선택해 주세요.");
           return;
         }
         if (!agree) {
@@ -74,7 +112,12 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
             phone: phone.trim(),
             role: "guest",
             rrn: wantRrn ? rrn.trim() : undefined,
-            passportName: wantPass ? passportName.trim() || undefined : undefined,
+            birthDate: birth || undefined,
+            gender: sex || undefined,
+            passportName: wantPass ? passportName.trim().toUpperCase() : undefined,
+            passportNo: wantPass ? passportNo.trim().toUpperCase() : undefined,
+            passportExpiry: wantPass ? passportExpiry : undefined,
+            nationality: wantPass ? "KOR" : undefined,
             passportImageDataUrl: wantPass ? passportImage : undefined,
             passportFileName: wantPass ? passportFileName : undefined,
             privacyAgreed: true,
@@ -115,6 +158,11 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
             onChange={(e) => setRrn(e.target.value)}
             required
           />
+          {wantPass ? (
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              생년월일과 성별은 주민번호로 명단에 넣습니다.
+            </p>
+          ) : null}
         </div>
       ) : null}
       {wantPass ? (
@@ -169,14 +217,69 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
             </label>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="g-en">영문 성명 (여권과 같으면)</Label>
+            <Label htmlFor="g-en">영문명 (NAME)</Label>
             <Input
               id="g-en"
               value={passportName}
               onChange={(e) => setPassportName(e.target.value)}
               placeholder="HONG GILDONG"
+              required
             />
           </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="g-pno">여권번호</Label>
+            <Input
+              id="g-pno"
+              value={passportNo}
+              onChange={(e) => setPassportNo(e.target.value)}
+              placeholder="M12345678"
+              autoComplete="off"
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="g-exp">여권만료일</Label>
+            <Input
+              id="g-exp"
+              type="date"
+              value={passportExpiry}
+              onChange={(e) => setPassportExpiry(e.target.value)}
+              required
+            />
+          </div>
+          {!wantRrn ? (
+            <>
+              <div className="space-y-1.5">
+                <Label htmlFor="g-birth">생년월일</Label>
+                <Input
+                  id="g-birth"
+                  type="date"
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>성별 (M/F)</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(["M", "F"] as const).map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      className={cn(
+                        "rounded-2xl border px-4 py-3 text-left",
+                        gender === g ? "border-[color:var(--navy)] bg-accent/70" : "bg-card"
+                      )}
+                      onClick={() => setGender(g)}
+                    >
+                      <p className="font-semibold">{g}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{g === "M" ? "남" : "여"}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : null}
         </>
       ) : null}
       <label className="flex items-start gap-2 text-sm">

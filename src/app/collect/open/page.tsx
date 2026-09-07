@@ -13,6 +13,8 @@ import {
   groupWatchPath,
   needsPassport,
   needsRrn,
+  parseRrnMeta,
+  rosterDate,
 } from "@/lib/group-collect";
 import { absoluteUrl } from "@/lib/paths";
 import { useGroupCampaign } from "@/lib/use-group-campaign";
@@ -108,12 +110,12 @@ function CollectOpenBody() {
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = `${campaign.title}-자료.csv`;
+            a.download = `${campaign.title}-여행자명단.csv`;
             a.click();
             URL.revokeObjectURL(url);
           }}
         >
-          엑셀용 CSV
+          명단 양식 CSV
         </Button>
         <Button
           type="button"
@@ -203,10 +205,22 @@ function CollectOpenBody() {
                       <dd className="font-medium tabular-nums">{row.rrn || "—"}</dd>
                     </>
                   ) : null}
-                  {needsPassport(campaign.kind) && row.passportName ? (
+                  {needsPassport(campaign.kind) ? (
                     <>
-                      <dt className="text-muted-foreground">영문 성명</dt>
-                      <dd>{row.passportName}</dd>
+                      <dt className="text-muted-foreground">영문명</dt>
+                      <dd>{row.passportName || "—"}</dd>
+                      <dt className="text-muted-foreground">생년월일</dt>
+                      <dd className="tabular-nums">
+                        {rosterDate(row.birthDate || (row.rrn ? parseRrnMeta(row.rrn)?.birthIso : "")) || "—"}
+                      </dd>
+                      <dt className="text-muted-foreground">성별</dt>
+                      <dd>{row.gender || parseRrnMeta(row.rrn ?? "")?.gender || "—"}</dd>
+                      <dt className="text-muted-foreground">여권번호</dt>
+                      <dd className="tabular-nums">{row.passportNo || "—"}</dd>
+                      <dt className="text-muted-foreground">여권만료일</dt>
+                      <dd className="tabular-nums">{rosterDate(row.passportExpiry) || "—"}</dd>
+                      <dt className="text-muted-foreground">국적</dt>
+                      <dd>{row.nationality || "KOR"}</dd>
                     </>
                   ) : null}
                 </dl>

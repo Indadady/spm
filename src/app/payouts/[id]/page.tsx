@@ -1,39 +1,42 @@
 "use client";
 
-import { CollectExtras } from "@/components/collect-extras";
 import { CopyLink } from "@/components/copy-link";
 import { PayeeCard } from "@/components/payee-card";
 import { TaxCard } from "@/components/tax-card";
 import { Button } from "@/components/ui/button";
 import { collectSharePath } from "@/lib/company";
+import { wipePayoutRemote } from "@/lib/delete-payout";
 import { formatPayDate, payDateIso } from "@/lib/format";
 import { absoluteUrl } from "@/lib/paths";
+import { deletePayeeSubmissions } from "@/lib/payee-inbox";
 import { publishPayoutMeta } from "@/lib/payout-meta";
 import { usePayout, useStore } from "@/lib/store";
 import { usePayeeInbox } from "@/lib/use-payee-inbox";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export default function PayoutPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const payout = usePayout(id);
-  const { setStatus, updatePayout, ready } = useStore();
+  const { setStatus, ready, removePayout, clearPayee } = useStore();
   const inbox = usePayeeInbox(id);
   const [collectUrl, setCollectUrl] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [clearingPayee, setClearingPayee] = useState(false);
+  const [error, setError] = useState("");
   useEffect(() => {
     setCollectUrl(absoluteUrl(collectSharePath(id)));
   }, [id]);
   useEffect(() => {
     if (!payout || payout.side !== "out") return;
-    void publishPayoutMeta(payout);
-  }, [
-    payout,
-    payout?.id,
-    payout?.collectInsurance,
-    payout?.collectPassport,
-    payout?.dueDate,
-  ]);
+    void publishPayoutMeta({
+      ...payout,
+      collectInsurance: false,
+      collectPassport: false,
+    });
+  }, [payout, payout?.id, payout?.dueDate]);
 
   if (!payout) {
     return (
@@ -71,18 +74,6 @@ export default function PayoutPage() {
         </div>
       ) : null}
 
-      {payout.side === "out" ? (
-        <CollectExtras
-          insurance={Boolean(payout.collectInsurance)}
-          passport={Boolean(payout.collectPassport)}
-          onChange={(next) => {
-            const patched = { ...payout, ...next };
-            updatePayout(payout.id, next);
-            void publishPayoutMeta(patched);
-          }}
-        />
-      ) : null}
-
       <TaxCard payout={payout} payee={inbox.payee} />
 
       {payout.side === "out" ? (
@@ -97,6 +88,60 @@ export default function PayoutPage() {
           이체 완료
         </Button>
       ) : null}
+
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+
+      {payout.side === "out" && inbox.payee ? (
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full sm:w-auto"
+          disabled={deleting || clearingPayee}
+          onClick={async () => {
+            if (
+              !window.confirm(
+                `${inbox.payee?.name || payout.partnerName} 받은 세무 자료를 삭제할까요? 지급 건과 링크는 그대로입니다.`
+              )
+            )
+              return;
+            setClearingPayee(true);
+            setError("");
+            try {
+              await deletePayeeSubmissions(payout.id);
+              clearPayee(payout.id);
+            } catch {
+              setError("지우지 못했습니다. 연결을 확인하고 다시 시도해 주세요.");
+            } finally {
+              setClearingPayee(false);
+            }
+          }}
+        >
+          {clearingPayee ? "지우는 중…" : "받은 자료 삭제"}
+        </Button>
+      ) : null}
+
+      <Button
+        type="button"
+        variant="destructive"
+        className="w-full sm:w-auto"
+        disabled={deleting}
+        onClick={async () => {
+          if (!window.confirm(`${payout.partnerName} 세무 자료를 삭제할까요? 되돌릴 수 없습니다.`))
+            return;
+          setDeleting(true);
+          setError("");
+          try {
+            await wipePayoutRemote(payout.id);
+            removePayout(payout.id);
+            router.push("/");
+          } catch {
+            setError("지우지 못했습니다. 연결을 확인하고 다시 시도해 주세요.");
+            setDeleting(false);
+          }
+        }}
+      >
+        {deleting ? "지우는 중…" : "삭제"}
+      </Button>
     </div>
   );
 }

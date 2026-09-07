@@ -22,7 +22,10 @@ export default function CollectPage() {
         </p>
       </section>
 
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Link href="/archive" className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>
+          보관함
+        </Link>
         <Link href="/collect/new" className={cn(buttonVariants({ size: "sm" }))}>
           새 링크
         </Link>

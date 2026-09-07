@@ -1,4 +1,4 @@
-import { addDoc, onSnapshot, query, type Unsubscribe } from "firebase/firestore";
+import { addDoc, deleteDoc, getDocs, onSnapshot, query, type Unsubscribe } from "firebase/firestore";
 import { getDownloadURL, listAll, ref, uploadString } from "firebase/storage";
 import { dataUrlBytes, shrinkDataUrl } from "./image-file";
 import { ensureAnonAuth, getFirebase, payeeResponsesCol, SURVEY_APP_ID } from "./firebase";
@@ -245,4 +245,11 @@ export function subscribePayees(
     cancelled = true;
     unsub();
   };
+}
+
+export async function deletePayeeSubmissions(payoutId: string) {
+  if (!payoutId) return;
+  await withTimeout(ensureAnonAuth(), 8_000, "auth");
+  const snap = await withTimeout(getDocs(query(payeeResponsesCol(payoutId))), 8_000, "list");
+  await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
 }
