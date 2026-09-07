@@ -78,17 +78,27 @@ export function PayeeCard({
           </dl>
         )}
         {payee?.signatureDataUrl ? (
-          <DocImage src={payee.signatureDataUrl} label="서명" />
+          <DocImage
+            src={payee.signatureDataUrl}
+            label="서명"
+            fileName={`${payee.name || payout.partnerName}-서명.jpg`}
+          />
         ) : null}
         {payee ? (
           <DocImage
             src={idSrc}
             label="신분증 사본"
+            fileName={`${payee.name || payout.partnerName}-신분증.jpg`}
             empty="신분증 사본이 아직 없습니다. 같은 링크를 다시 보내 사진을 받으면 여기에 보입니다."
           />
         ) : null}
         {payout.collectPassport || passSrc ? (
-          <DocImage src={passSrc} label="여권사본" empty="여권사본이 아직 없습니다." />
+          <DocImage
+            src={passSrc}
+            label="여권사본"
+            fileName={`${payee?.name || payout.partnerName}-여권.jpg`}
+            empty="여권사본이 아직 없습니다."
+          />
         ) : null}
       </CardContent>
     </Card>
