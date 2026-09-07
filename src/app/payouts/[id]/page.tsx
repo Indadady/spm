@@ -4,6 +4,7 @@ import { CopyLink } from "@/components/copy-link";
 import { PayeeCard } from "@/components/payee-card";
 import { TaxCard } from "@/components/tax-card";
 import { Button } from "@/components/ui/button";
+import { collectSharePath } from "@/lib/company";
 import { formatPayDate, todaySeoulIso } from "@/lib/format";
 import { absoluteUrl } from "@/lib/paths";
 import { usePayout, useStore } from "@/lib/store";
@@ -17,8 +18,10 @@ export default function PayoutPage() {
   const payout = usePayout(id);
   const { setStatus, ready } = useStore();
   const inbox = usePayeeInbox(id);
-  const [origin, setOrigin] = useState("");
-  useEffect(() => setOrigin(window.location.origin), []);
+  const [collectUrl, setCollectUrl] = useState("");
+  useEffect(() => {
+    setCollectUrl(absoluteUrl(collectSharePath(id)));
+  }, [id]);
 
   if (!payout) {
     return (
@@ -27,8 +30,6 @@ export default function PayoutPage() {
       </p>
     );
   }
-
-  const collectUrl = origin ? absoluteUrl(`/p/${payout.id}`) : "";
 
   return (
     <div className="space-y-5">
@@ -52,7 +53,9 @@ export default function PayoutPage() {
               {collectUrl || "주소를 만드는 중…"}
             </p>
           </div>
-          {collectUrl ? <CopyLink url={collectUrl} /> : null}
+          {collectUrl ? (
+            <CopyLink payoutId={payout.id} onCopied={setCollectUrl} />
+          ) : null}
         </div>
       ) : null}
 

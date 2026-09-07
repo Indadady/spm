@@ -3,18 +3,14 @@
 import { CopyLink } from "@/components/copy-link";
 import { buttonVariants } from "@/components/ui/button";
 import { formatPayDate, formatWon } from "@/lib/format";
-import { absoluteUrl } from "@/lib/paths";
 import { payeeReady } from "@/lib/payout-types";
 import { useStore } from "@/lib/store";
 import { calcTax } from "@/lib/tax";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { useEffect, useState } from "react";
 
 export default function HomePage() {
   const { payouts, ready, payeeOf } = useStore();
-  const [origin, setOrigin] = useState("");
-  useEffect(() => setOrigin(window.location.origin), []);
 
   const outgoing = payouts.filter((p) => p.side === "out");
 
@@ -67,9 +63,9 @@ export default function HomePage() {
                     지급일 {formatPayDate(p.paidDate || p.dueDate)}
                   </p>
                 </Link>
-                {origin && p.status !== "paid" ? (
+                {p.status !== "paid" ? (
                   <div className="mt-1 flex justify-end">
-                    <CopyLink url={absoluteUrl(`/p/${p.id}`)} label="자료 링크 복사" />
+                    <CopyLink payoutId={p.id} label="자료 링크 복사" />
                   </div>
                 ) : null}
               </li>
