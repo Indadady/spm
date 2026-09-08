@@ -447,7 +447,9 @@ export function groupEntriesXlsx(kind: CollectKind, rows: GroupEntry[]) {
 }
 
 export function downloadRosterFile(title: string, bytes: Uint8Array) {
-  const blob = new Blob([bytes], {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  const blob = new Blob([copy.buffer as ArrayBuffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
   const url = URL.createObjectURL(blob);
