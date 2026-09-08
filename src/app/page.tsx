@@ -36,7 +36,7 @@ export default function HomePage() {
           <Link href="/archive" className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>
             보관함
           </Link>
-          <Link href="/archive#restore" className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>
+          <Link href="/archive/#restore" className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>
             예전 링크 복원
           </Link>
         </div>
@@ -152,7 +152,7 @@ export default function HomePage() {
           <p className="rounded-2xl border bg-card px-4 py-3 text-sm leading-relaxed text-muted-foreground">
             아직 여행자 링크가 없습니다. 행사 담당자에게 보낼 링크를 만들면, 참가자가 주민번호나
             여권사진을 직접 넣습니다. 예전에 만든 링크가 안 보이면{" "}
-            <Link href="/archive#restore" className="underline">
+            <Link href="/archive/#restore" className="underline">
               복원
             </Link>
             에서 가져올 수 있습니다.
