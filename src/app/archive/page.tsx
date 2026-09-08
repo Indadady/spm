@@ -2,6 +2,7 @@
 
 import { CopyLink } from "@/components/copy-link";
 import { GroupCopyLink } from "@/components/group-copy-link";
+import { RestorePanel } from "@/components/restore-panel";
 import { Button } from "@/components/ui/button";
 import { wipePayoutRemote } from "@/lib/delete-payout";
 import { formatPayDate, formatWon } from "@/lib/format";
@@ -17,7 +18,7 @@ import { useStore } from "@/lib/store";
 import { calcTax } from "@/lib/tax";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export default function ArchivePage() {
   const { payouts, ready, payeeOf, removePayout } = useStore();
@@ -42,6 +43,10 @@ export default function ArchivePage() {
     return [...set].filter((y) => y !== "0000").sort((a, b) => b.localeCompare(a));
   }, [payoutMonths, campaignMonths]);
   const [year, setYear] = useState("");
+  useEffect(() => {
+    if (window.location.hash !== "#restore") return;
+    document.getElementById("restore")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
   const activeYear = year && years.includes(year) ? year : years[0] ?? "";
   const months = useMemo(() => {
     const keys = new Set<string>();
@@ -69,6 +74,8 @@ export default function ArchivePage() {
           홈에는 최근 자료만 둡니다. 지난 지급·여행자 링크는 연도·월별로 모아 둡니다.
         </p>
       </div>
+
+      <RestorePanel />
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 

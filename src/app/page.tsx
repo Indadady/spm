@@ -32,9 +32,12 @@ export default function HomePage() {
           심플한 링크를 보내 자료를 받습니다. 스마트파트너 지급과 여행자 보험·여권을 한곳에서
           모읍니다. 홈에는 최근 5건만 두고, 지난 자료는 보관함에서 봅니다.
         </p>
-        <div className="mt-3">
+        <div className="mt-3 flex flex-wrap gap-2">
           <Link href="/archive" className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>
             보관함
+          </Link>
+          <Link href="/archive#restore" className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>
+            예전 링크 복원
           </Link>
         </div>
       </section>
@@ -148,7 +151,11 @@ export default function HomePage() {
         ) : campsShown.total === 0 ? (
           <p className="rounded-2xl border bg-card px-4 py-3 text-sm leading-relaxed text-muted-foreground">
             아직 여행자 링크가 없습니다. 행사 담당자에게 보낼 링크를 만들면, 참가자가 주민번호나
-            여권사진을 직접 넣습니다.
+            여권사진을 직접 넣습니다. 예전에 만든 링크가 안 보이면{" "}
+            <Link href="/archive#restore" className="underline">
+              복원
+            </Link>
+            에서 가져올 수 있습니다.
           </p>
         ) : (
           <ul className="space-y-2">

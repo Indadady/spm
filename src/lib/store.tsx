@@ -19,6 +19,7 @@ export type CaseState = {
 
 type Store = {
   payouts: Payout[];
+  hiddenIds: string[];
   ready: boolean;
   addPayout: (p: Payout) => void;
   removePayout: (id: string) => void;
@@ -144,6 +145,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const value: Store = {
     payouts,
+    hiddenIds,
     ready,
     addPayout: (p) => {
       setHiddenIds((ids) => ids.filter((id) => id !== p.id));

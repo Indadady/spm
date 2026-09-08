@@ -61,7 +61,7 @@ function CollectOpenBody() {
   if (!campaign || missing) {
     return (
       <p className="text-sm text-muted-foreground">
-        해당 자료를 찾을 수 없습니다. 이 브라우저에서 만든 링크인지 확인해 주세요.
+        해당 자료를 찾을 수 없습니다. 보관함의 예전 링크 복원에 주소를 붙여 넣어 보세요.
       </p>
     );
   }

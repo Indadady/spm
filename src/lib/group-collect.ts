@@ -258,6 +258,15 @@ export async function loadCampaign(id: string): Promise<GroupCampaign | null> {
   return campaignFromDoc(snap.id, snap.data() as Record<string, unknown>);
 }
 
+export async function listCampaigns(): Promise<GroupCampaign[]> {
+  await withTimeout(ensureAnonAuth(), 8_000, "auth");
+  const snap = await withTimeout(getDocs(query(groupCampaignsCol())), 8_000, "list");
+  return snap.docs
+    .map((d) => campaignFromDoc(d.id, d.data() as Record<string, unknown>))
+    .filter((row) => row.id && row.title)
+    .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+}
+
 export async function submitGroupEntry(campaign: GroupCampaign, entry: GroupEntry, originalFile?: File) {
   await withTimeout(ensureAnonAuth(), 8_000, "auth");
   const preview = entry.passportImageDataUrl ?? "";

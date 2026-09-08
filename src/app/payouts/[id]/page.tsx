@@ -9,7 +9,7 @@ import { wipePayoutRemote } from "@/lib/delete-payout";
 import { formatPayDate, payDateIso } from "@/lib/format";
 import { absoluteUrl } from "@/lib/paths";
 import { deletePayeeSubmissions } from "@/lib/payee-inbox";
-import { publishPayoutMeta } from "@/lib/payout-meta";
+import { loadPayoutMeta, payoutFromMeta, publishPayoutMeta } from "@/lib/payout-meta";
 import { usePayout, useStore } from "@/lib/store";
 import { usePayeeInbox } from "@/lib/use-payee-inbox";
 import Link from "next/link";
@@ -20,15 +20,36 @@ export default function PayoutPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const payout = usePayout(id);
-  const { setStatus, ready, removePayout, clearPayee } = useStore();
+  const { setStatus, ready, removePayout, clearPayee, addPayout } = useStore();
   const inbox = usePayeeInbox(id);
   const [collectUrl, setCollectUrl] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [clearingPayee, setClearingPayee] = useState(false);
   const [error, setError] = useState("");
+  const [looking, setLooking] = useState(true);
   useEffect(() => {
     setCollectUrl(absoluteUrl(collectSharePath(id)));
   }, [id]);
+  useEffect(() => {
+    if (!ready) return;
+    if (payout || !id) {
+      setLooking(false);
+      return;
+    }
+    let cancelled = false;
+    setLooking(true);
+    loadPayoutMeta(id)
+      .then((meta) => {
+        if (!cancelled && meta) addPayout(payoutFromMeta(meta));
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setLooking(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [addPayout, id, payout, ready]);
   useEffect(() => {
     if (!payout || payout.side !== "out") return;
     void publishPayoutMeta({
@@ -41,7 +62,9 @@ export default function PayoutPage() {
   if (!payout) {
     return (
       <p className="text-sm text-muted-foreground">
-        {ready ? "해당 건을 찾을 수 없습니다." : "불러오는 중…"}
+        {ready && !looking
+          ? "해당 건을 찾을 수 없습니다. 보관함의 예전 링크 복원에 주소를 붙여 넣어 보세요."
+          : "불러오는 중…"}
       </p>
     );
   }

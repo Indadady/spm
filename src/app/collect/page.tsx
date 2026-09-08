@@ -23,6 +23,9 @@ export default function CollectPage() {
       </section>
 
       <div className="flex justify-end gap-2">
+        <Link href="/archive#restore" className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>
+          복원
+        </Link>
         <Link href="/archive" className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>
           보관함
         </Link>
@@ -37,7 +40,12 @@ export default function CollectPage() {
         <p className="text-sm text-muted-foreground">불러오는 중…</p>
       ) : campaigns.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          아직 링크가 없습니다. 새 링크를 만들어 담당자 단체방에 보내 주세요.
+          아직 링크가 없습니다. 새 링크를 만들어 담당자 단체방에 보내 주세요. 예전에 만든 링크가 안
+          보이면{" "}
+          <Link href="/archive#restore" className="underline">
+            복원
+          </Link>
+          에서 가져올 수 있습니다.
         </p>
       ) : (
         <ul className="space-y-2">
