@@ -111,6 +111,8 @@ export type RosterSheet = {
   headers: string[];
   widths: number[];
   rows: string[][];
+  /** 본문과 같은 크기. true인 칸은 노란색 */
+  warn?: boolean[][];
 };
 
 function sheetXml(sheet: RosterSheet) {
@@ -129,10 +131,11 @@ function sheetXml(sheet: RosterSheet) {
     .map((row, ri) => {
       const r = ri + 2;
       const cells = sheet.headers
-        .map(
-          (_, i) =>
-            `<c r="${colLetter(i)}${r}" t="inlineStr" s="2"><is><t xml:space="preserve">${xmlEscape(row[i] ?? "")}</t></is></c>`
-        )
+        .map((_, i) => {
+          const warn = sheet.warn?.[ri]?.[i];
+          const style = warn ? "4" : "2";
+          return `<c r="${colLetter(i)}${r}" t="inlineStr" s="${style}"><is><t xml:space="preserve">${xmlEscape(row[i] ?? "")}</t></is></c>`;
+        })
         .join("");
       return `<row r="${r}" ht="18">${cells}</row>`;
     })
@@ -216,10 +219,11 @@ const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     <font><b/><sz val="11"/><name val="맑은 고딕"/></font>
     <font><i/><sz val="9"/><color rgb="FF808080"/><name val="맑은 고딕"/></font>
   </fonts>
-  <fills count="3">
+  <fills count="4">
     <fill><patternFill patternType="none"/></fill>
     <fill><patternFill patternType="gray125"/></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FFD9D9D9"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFFFFF00"/><bgColor indexed="64"/></patternFill></fill>
   </fills>
   <borders count="2">
     <border><left/><right/><top/><bottom/><diagonal/></border>
@@ -232,7 +236,7 @@ const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     </border>
   </borders>
   <cellStyleXfs count="1"><xf/></cellStyleXfs>
-  <cellXfs count="4">
+  <cellXfs count="5">
     <xf xfId="0"/>
     <xf fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">
       <alignment horizontal="center" vertical="center" wrapText="1"/>
@@ -242,6 +246,9 @@ const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     </xf>
     <xf fontId="2" xfId="0" applyFont="1" applyAlignment="1">
       <alignment horizontal="right" vertical="center"/>
+    </xf>
+    <xf fontId="0" fillId="3" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1">
+      <alignment vertical="center"/>
     </xf>
   </cellXfs>
 </styleSheet>`;

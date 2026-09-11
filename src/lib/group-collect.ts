@@ -128,14 +128,6 @@ export function looksLikePassportName(name?: string) {
   return /^[A-Z]{2,12} [A-Z]{2,20}$/.test(n);
 }
 
-export function passportReadUnsure(row: GroupEntry) {
-  if (row.passportScan === "manual") return rowNeedsPassportScan(row);
-  if (row.passportScan === "partial" || row.passportScan === "fail") return true;
-  if (rowNeedsPassportScan(row)) return true;
-  if (row.passportScan === "ok") return !looksLikePassportName(row.passportName);
-  return !looksLikePassportName(row.passportName);
-}
-
 export function markPassportScan(
   hit: { passportName?: string; passportNo?: string; passportExpiry?: string } | null
 ): PassportScanMark {
@@ -493,6 +485,24 @@ function birthGender(row: GroupEntry) {
   };
 }
 
+function passportNoLooksOk(no?: string) {
+  const n = (no ?? "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
+  return /^[A-Z]{2}\d{7}$/.test(n) || /^[A-Z]\d{8}$/.test(n);
+}
+
+function excelWarnPassport(row: GroupEntry) {
+  const markedBad = row.passportScan === "fail" || row.passportScan === "partial";
+  const fromRrn = Boolean(row.rrn && parseRrnMeta(row.rrn));
+  const { birth, gender } = birthGender(row);
+  return {
+    name: markedBad || !looksLikePassportName(row.passportName),
+    birth: fromRrn ? false : !birth,
+    gender: fromRrn ? false : !gender,
+    no: markedBad || !passportNoLooksOk(row.passportNo),
+    expiry: markedBad || !rosterDate(row.passportExpiry),
+  };
+}
+
 export function groupEntriesXlsx(kind: CollectKind, rows: GroupEntry[]) {
   const ordered = rosterRows(rows);
   const sheets: RosterSheet[] = [];
@@ -514,6 +524,10 @@ export function groupEntriesXlsx(kind: CollectKind, rows: GroupEntry[]) {
           row.nationality || "KOR",
           row.note ?? "",
         ];
+      }),
+      warn: ordered.map((row) => {
+        const w = excelWarnPassport(row);
+        return [false, false, w.name, w.birth, w.gender, w.no, w.expiry, false, false];
       }),
     });
   }

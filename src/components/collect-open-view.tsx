@@ -2,7 +2,6 @@
 
 import { CopyTextButton } from "@/components/copy-text-button";
 import { DocImage } from "@/components/doc-image";
-import { GroupEntryPassportEdit } from "@/components/group-entry-passport-edit";
 import { GroupPinGate } from "@/components/group-pin-gate";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,7 +20,6 @@ import {
   needsPassport,
   needsRrn,
   parseRrnMeta,
-  passportReadUnsure,
   patchGroupEntry,
   rosterDate,
   rowNeedsPassportScan,
@@ -257,14 +255,10 @@ export function CollectOpenView({
             {inbox.rows.map((row) => {
               const passSrc = row.passportImageUrl || row.passportImageDataUrl;
               const passExt = row.passportFileName?.match(/\.[a-zA-Z0-9]+$/)?.[0] || ".jpg";
-              const unsure = needsPassport(campaign.kind) && passportReadUnsure(row);
               return (
                 <li
                   key={row.remoteId ?? `${row.name}-${row.submittedAt}`}
-                  className={cn(
-                    "rounded-2xl border bg-card px-4 py-3",
-                    unsure && "border-[#e6c200] bg-[#fff4a3]"
-                  )}
+                  className="rounded-2xl border bg-card px-4 py-3"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -294,11 +288,6 @@ export function CollectOpenView({
                       </Button>
                     ) : null}
                   </div>
-                  {unsure ? (
-                    <p className="mt-2 text-xs leading-relaxed">
-                      사진에서 영문을 정확히 못 읽었습니다. 사본을 내려받아 수기로 확인해 주세요.
-                    </p>
-                  ) : null}
                   {needsRrn(campaign.kind) ? (
                     <dl className="mt-2 grid grid-cols-[6.5rem_1fr] gap-y-1 text-sm">
                       <dt className="text-muted-foreground">주민등록번호</dt>
@@ -317,15 +306,22 @@ export function CollectOpenView({
                   ) : null}
                   {needsPassport(campaign.kind) ? (
                     <>
-                      {!needsRrn(campaign.kind) && (row.birthDate || row.gender) ? (
-                        <dl className="mt-2 grid grid-cols-[6.5rem_1fr] gap-y-1 text-sm">
-                          <dt className="text-muted-foreground">생년월일</dt>
-                          <dd className="tabular-nums">{rosterDate(row.birthDate) || "—"}</dd>
-                          <dt className="text-muted-foreground">성별</dt>
-                          <dd>{row.gender || "—"}</dd>
-                        </dl>
-                      ) : null}
-                      <GroupEntryPassportEdit campaignId={campaign.id} row={row} />
+                      <dl className="mt-2 grid grid-cols-[6.5rem_1fr] gap-y-1 text-sm">
+                        <dt className="text-muted-foreground">영문명</dt>
+                        <dd>{row.passportName || "—"}</dd>
+                        <dt className="text-muted-foreground">여권번호</dt>
+                        <dd className="tabular-nums">{row.passportNo || "—"}</dd>
+                        <dt className="text-muted-foreground">여권만료일</dt>
+                        <dd className="tabular-nums">{rosterDate(row.passportExpiry) || "—"}</dd>
+                        {!needsRrn(campaign.kind) && (row.birthDate || row.gender) ? (
+                          <>
+                            <dt className="text-muted-foreground">생년월일</dt>
+                            <dd className="tabular-nums">{rosterDate(row.birthDate) || "—"}</dd>
+                            <dt className="text-muted-foreground">성별</dt>
+                            <dd>{row.gender || "—"}</dd>
+                          </>
+                        ) : null}
+                      </dl>
                       <div className="mt-3">
                         <DocImage
                           src={passSrc}
