@@ -1,6 +1,13 @@
-import { parsePassportMrz, type PassportScan } from "./passport-mrz";
+import {
+  mergePassportScan,
+  parsePassportText,
+  passportScanReady,
+  type PassportScan,
+} from "./passport-mrz";
+import { uprightPassportCanvas } from "./passport-orient";
 
 export type { PassportScan };
+export { passportScanReady, passportScanUseful, mergePassportScan } from "./passport-mrz";
 
 type TessWorker = {
   setParameters: (p: Record<string, string>) => Promise<void>;
@@ -19,6 +26,8 @@ const TESS_VER = "5.1.1";
 const SCRIPT_SRC = `https://cdn.jsdelivr.net/npm/tesseract.js@${TESS_VER}/dist/tesseract.min.js`;
 const WORKER_PATH = `https://cdn.jsdelivr.net/npm/tesseract.js@${TESS_VER}/dist/worker.min.js`;
 const LANG_PATH = "https://tessdata.projectnaptha.com/4.0.0";
+const MRZ_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<";
+const NAME_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ ";
 
 let workerPromise: Promise<TessWorker> | null = null;
 
@@ -43,61 +52,197 @@ function loadTessScript() {
   });
 }
 
-function loadImage(src: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const el = new Image();
-    const timer = window.setTimeout(() => reject(new Error("이미지를 읽지 못했습니다.")), 12_000);
-    el.onload = () => {
-      window.clearTimeout(timer);
-      resolve(el);
-    };
-    el.onerror = () => {
-      window.clearTimeout(timer);
-      reject(new Error("이미지를 읽지 못했습니다."));
-    };
-    if (!src.startsWith("blob:") && !src.startsWith("data:")) el.crossOrigin = "anonymous";
-    el.src = src;
-  });
+async function blobFromInput(input: File | string) {
+  if (typeof input !== "string") return input;
+  if (input.startsWith("data:")) {
+    const res = await fetch(input);
+    return res.blob();
+  }
+  if (input.startsWith("blob:")) {
+    const res = await fetch(input);
+    return res.blob();
+  }
+  const res = await fetch(input);
+  if (!res.ok) throw new Error("이미지를 읽지 못했습니다.");
+  return res.blob();
 }
 
-async function srcFromInput(input: File | string) {
-  if (typeof input !== "string") return URL.createObjectURL(input);
-  if (input.startsWith("data:") || input.startsWith("blob:")) return input;
+async function canvasFromBlob(blob: Blob) {
+  if (typeof createImageBitmap === "function") {
+    try {
+      const bmp = await createImageBitmap(blob, { imageOrientation: "from-image" });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, bmp.width);
+      canvas.height = Math.max(1, bmp.height);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("캔버스를 만들지 못했습니다.");
+      ctx.drawImage(bmp, 0, 0);
+      bmp.close();
+      return canvas;
+    } catch {
+      /* img fallback */
+    }
+  }
+  const src = URL.createObjectURL(blob);
   try {
-    const res = await fetch(input);
-    if (!res.ok) return input;
-    return URL.createObjectURL(await res.blob());
-  } catch {
-    return input;
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      const timer = window.setTimeout(() => reject(new Error("이미지를 읽지 못했습니다.")), 20_000);
+      el.onload = () => {
+        window.clearTimeout(timer);
+        resolve(el);
+      };
+      el.onerror = () => {
+        window.clearTimeout(timer);
+        reject(new Error("이미지를 읽지 못했습니다."));
+      };
+      el.src = src;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, img.naturalWidth || img.width);
+    canvas.height = Math.max(1, img.naturalHeight || img.height);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("캔버스를 만들지 못했습니다.");
+    ctx.drawImage(img, 0, 0);
+    return canvas;
+  } finally {
+    URL.revokeObjectURL(src);
   }
 }
 
-function drawRegion(
-  img: HTMLImageElement,
-  opts: { top: number; height: number; max: number; contrast: number }
-) {
-  const sy = Math.floor(img.height * opts.top);
-  const sh = Math.max(8, Math.floor(img.height * opts.height));
-  const scale = Math.min(2.4, opts.max / Math.max(img.width, sh));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(8, Math.round(img.width * scale));
-  canvas.height = Math.max(8, Math.round(sh * scale));
+function otsuThreshold(px: Uint8ClampedArray) {
+  const hist = new Array<number>(256).fill(0);
+  let total = 0;
+  for (let i = 0; i < px.length; i += 4) {
+    hist[px[i] ?? 0] += 1;
+    total += 1;
+  }
+  let sum = 0;
+  for (let i = 0; i < 256; i += 1) sum += i * (hist[i] ?? 0);
+  let sumB = 0;
+  let wB = 0;
+  let max = 0;
+  let thresh = 128;
+  for (let t = 0; t < 256; t += 1) {
+    wB += hist[t] ?? 0;
+    if (!wB) continue;
+    const wF = total - wB;
+    if (!wF) break;
+    sumB += t * (hist[t] ?? 0);
+    const mB = sumB / wB;
+    const mF = (sum - sumB) / wF;
+    const between = wB * wF * (mB - mF) * (mB - mF);
+    if (between > max) {
+      max = between;
+      thresh = t;
+    }
+  }
+  return thresh;
+}
+
+function grayContrast(canvas: HTMLCanvasElement, contrast: number, binary: boolean, invert: boolean) {
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("캔버스를 만들지 못했습니다.");
-  ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(img, 0, sy, img.width, sh, 0, 0, canvas.width, canvas.height);
+  if (!ctx) return canvas;
   const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const px = data.data;
-  const c = opts.contrast;
   for (let i = 0; i < px.length; i += 4) {
-    const g = px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11;
-    const v = Math.max(0, Math.min(255, (g - 128) * c + 128));
+    const g = (px[i] ?? 0) * 0.3 + (px[i + 1] ?? 0) * 0.59 + (px[i + 2] ?? 0) * 0.11;
+    const v = Math.max(0, Math.min(255, (g - 128) * contrast + 128));
     px[i] = v;
     px[i + 1] = v;
     px[i + 2] = v;
   }
+  if (binary) {
+    const cut = otsuThreshold(px);
+    for (let i = 0; i < px.length; i += 4) {
+      const v = (px[i] ?? 0) >= cut ? 255 : 0;
+      px[i] = v;
+      px[i + 1] = v;
+      px[i + 2] = v;
+    }
+  }
+  if (invert) {
+    for (let i = 0; i < px.length; i += 4) {
+      px[i] = 255 - (px[i] ?? 0);
+      px[i + 1] = 255 - (px[i + 1] ?? 0);
+      px[i + 2] = 255 - (px[i + 2] ?? 0);
+    }
+  }
   ctx.putImageData(data, 0, 0);
   return canvas;
+}
+
+function copyRegion(
+  src: HTMLCanvasElement,
+  opts: { top: number; height: number; max: number; contrast: number; binary?: boolean; invert?: boolean }
+) {
+  const sy = Math.floor(src.height * opts.top);
+  const sh = Math.max(8, Math.floor(src.height * opts.height));
+  const scale = Math.min(3, opts.max / Math.max(src.width, sh));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(8, Math.round(src.width * scale));
+  canvas.height = Math.max(8, Math.round(sh * scale));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("캔버스를 만들지 못했습니다.");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(src, 0, sy, src.width, sh, 0, 0, canvas.width, canvas.height);
+  return grayContrast(canvas, opts.contrast, Boolean(opts.binary), Boolean(opts.invert));
+}
+
+function rotateCanvas(src: HTMLCanvasElement, deg: number) {
+  if (!deg) return src;
+  const r = (deg * Math.PI) / 180;
+  const sin = Math.abs(Math.sin(r));
+  const cos = Math.abs(Math.cos(r));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(8, Math.round(src.width * cos + src.height * sin));
+  canvas.height = Math.max(8, Math.round(src.width * sin + src.height * cos));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return src;
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate(r);
+  ctx.drawImage(src, -src.width / 2, -src.height / 2);
+  return canvas;
+}
+
+function mrzBand(src: HTMLCanvasElement) {
+  const sample = document.createElement("canvas");
+  const scale = Math.min(1, 480 / Math.max(src.width, src.height));
+  sample.width = Math.max(8, Math.round(src.width * scale));
+  sample.height = Math.max(8, Math.round(src.height * scale));
+  const ctx = sample.getContext("2d");
+  if (!ctx) return { top: 0.62, height: 0.34 };
+  ctx.drawImage(src, 0, 0, sample.width, sample.height);
+  const { data } = ctx.getImageData(0, 0, sample.width, sample.height);
+  const energy = new Float64Array(sample.height);
+  for (let y = 0; y < sample.height; y += 1) {
+    let sum = 0;
+    for (let x = 1; x < sample.width; x += 1) {
+      const i = (y * sample.width + x) * 4;
+      const j = (y * sample.width + x - 1) * 4;
+      const g1 = (data[i] ?? 0) * 0.3 + (data[i + 1] ?? 0) * 0.59 + (data[i + 2] ?? 0) * 0.11;
+      const g0 = (data[j] ?? 0) * 0.3 + (data[j + 1] ?? 0) * 0.59 + (data[j + 2] ?? 0) * 0.11;
+      sum += Math.abs(g1 - g0);
+    }
+    energy[y] = sum / sample.width;
+  }
+  const win = Math.max(10, Math.round(sample.height * 0.12));
+  let best = 0;
+  let bestAt = Math.floor(sample.height * 0.7);
+  let run = 0;
+  for (let y = 0; y < win; y += 1) run += energy[y] ?? 0;
+  best = run;
+  for (let y = win; y < sample.height; y += 1) {
+    run += (energy[y] ?? 0) - (energy[y - win] ?? 0);
+    if (run > best) {
+      best = run;
+      bestAt = y - win + 1;
+    }
+  }
+  const top = Math.max(0, bestAt / sample.height - 0.03);
+  const height = Math.min(0.45, 1 - top);
+  return { top, height: Math.max(0.16, height) };
 }
 
 async function tessWorker() {
@@ -117,7 +262,7 @@ async function tessWorker() {
           langPath: LANG_PATH,
         });
         await worker.setParameters({
-          tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<",
+          tessedit_char_whitelist: MRZ_CHARS,
           tessedit_pageseg_mode: "6",
         });
         return worker;
@@ -130,38 +275,53 @@ async function tessWorker() {
   return workerPromise;
 }
 
-async function readCanvas(canvas: HTMLCanvasElement) {
+async function readCanvas(canvas: HTMLCanvasElement, psm: string, whitelist: string) {
   const worker = await tessWorker();
+  await worker.setParameters({
+    tessedit_char_whitelist: whitelist,
+    tessedit_pageseg_mode: psm,
+  });
   const { data } = await worker.recognize(canvas);
   return data.text ?? "";
 }
 
 export async function scanPassportImage(input: File | string): Promise<PassportScan | null> {
-  const src = await srcFromInput(input);
-  const revoke = src.startsWith("blob:") && (typeof input !== "string" || !input.startsWith("blob:"));
   try {
-    const img = await loadImage(src);
-    const crops = [
-      { top: 0.58, height: 0.42, max: 1800, contrast: 1.45 },
-      { top: 0.62, height: 0.38, max: 2000, contrast: 1.7 },
-      { top: 0.5, height: 0.5, max: 1600, contrast: 1.35 },
-      { top: 0, height: 1, max: 1400, contrast: 1.2 },
+    const blob = await blobFromInput(input);
+    const raw = await canvasFromBlob(blob);
+    const img = uprightPassportCanvas(raw).canvas;
+    const band = mrzBand(img);
+    const tries: Array<{
+      top: number;
+      height: number;
+      max: number;
+      contrast: number;
+      binary?: boolean;
+      invert?: boolean;
+      psm: string;
+      rotate?: number;
+      names?: boolean;
+    }> = [
+      { ...band, max: 2200, contrast: 1.35, binary: true, psm: "6" },
+      { ...band, max: 2000, contrast: 1.55, psm: "6" },
+      { top: 0.58, height: 0.42, max: 2000, contrast: 1.45, psm: "6" },
+      { top: 0.08, height: 0.58, max: 1600, contrast: 1.2, psm: "6", names: true },
+      { ...band, max: 1800, contrast: 1.3, binary: true, invert: true, psm: "6" },
+      { ...band, max: 2200, contrast: 1.4, binary: true, psm: "7", rotate: -3 },
+      { ...band, max: 2200, contrast: 1.4, binary: true, psm: "7", rotate: 3 },
+      { top: 0, height: 1, max: 1400, contrast: 1.15, psm: "6" },
     ];
-    for (const crop of crops) {
-      const hit = parsePassportMrz(await readCanvas(drawRegion(img, crop)));
-      if (hit) return hit;
+    let best: PassportScan | null = null;
+    for (const tryOn of tries) {
+      const region = copyRegion(img, tryOn);
+      const canvas = rotateCanvas(region, tryOn.rotate ?? 0);
+      const text = await readCanvas(canvas, tryOn.psm, tryOn.names ? NAME_CHARS : MRZ_CHARS);
+      best = mergePassportScan(best, parsePassportText(text));
+      if (passportScanReady(best)) return best;
     }
-    const first = crops[0];
-    if (!first) return null;
-    const worker = await tessWorker();
-    await worker.setParameters({ tessedit_pageseg_mode: "7" });
-    const retry = parsePassportMrz(await readCanvas(drawRegion(img, first)));
-    await worker.setParameters({ tessedit_pageseg_mode: "6" });
-    return retry;
+    return best;
   } catch {
     workerPromise = null;
     return null;
-  } finally {
-    if (revoke) URL.revokeObjectURL(src);
   }
 }

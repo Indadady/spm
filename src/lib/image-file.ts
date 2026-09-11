@@ -34,19 +34,39 @@ function loadImage(src: string) {
   });
 }
 
+async function canvasFromSource(src: string | File, max: number, quality: number) {
+  if (typeof src !== "string" && typeof createImageBitmap === "function") {
+    try {
+      const bmp = await createImageBitmap(src, { imageOrientation: "from-image" });
+      const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(bmp.width * scale));
+      canvas.height = Math.max(1, Math.round(bmp.height * scale));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("이미지를 줄이지 못했습니다.");
+      ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+      bmp.close();
+      return canvas.toDataURL("image/jpeg", quality);
+    } catch {
+      /* img fallback */
+    }
+  }
+  const url = typeof src === "string" ? src : URL.createObjectURL(src);
+  try {
+    return canvasJpeg(await loadImage(url), max, quality);
+  } finally {
+    if (typeof src !== "string") URL.revokeObjectURL(url);
+  }
+}
+
 const EMBED_LIMIT = 220_000;
 
 export async function fileToJpeg(file: File, max = 640, quality = 0.48): Promise<string> {
-  const url = URL.createObjectURL(file);
-  try {
-    let jpeg = await canvasJpeg(await loadImage(url), max, quality);
-    if (dataUrlBytes(jpeg) <= EMBED_LIMIT) return jpeg;
-    jpeg = await canvasJpeg(await loadImage(jpeg), 480, 0.4);
-    if (dataUrlBytes(jpeg) <= EMBED_LIMIT) return jpeg;
-    return canvasJpeg(await loadImage(jpeg), 360, 0.35);
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  let jpeg = await canvasFromSource(file, max, quality);
+  if (dataUrlBytes(jpeg) <= EMBED_LIMIT) return jpeg;
+  jpeg = await canvasJpeg(await loadImage(jpeg), 480, 0.4);
+  if (dataUrlBytes(jpeg) <= EMBED_LIMIT) return jpeg;
+  return canvasJpeg(await loadImage(jpeg), 360, 0.35);
 }
 
 export async function fileForDownload(file: File): Promise<File> {

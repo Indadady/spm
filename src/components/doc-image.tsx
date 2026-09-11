@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { uprightImageSrc } from "@/lib/passport-orient";
+import { useEffect, useState } from "react";
 
 async function saveImage(src: string, fileName: string) {
   const a = document.createElement("a");
@@ -29,16 +30,40 @@ export function DocImage({
   empty,
   fileName,
   download = true,
+  upright = false,
 }: {
   src?: string;
   label: string;
   empty?: string;
   fileName?: string;
   download?: boolean;
+  upright?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [shown, setShown] = useState(src ?? "");
   const saveAs = (fileName || `${label}.jpg`).replace(/[\\/:*?"<>|]+/g, "_");
+
+  useEffect(() => {
+    setFailed(false);
+    if (!src) {
+      setShown("");
+      return;
+    }
+    setShown(src);
+    if (!upright) return;
+    let gone = false;
+    void uprightImageSrc(src)
+      .then((next) => {
+        if (!gone) setShown(next);
+      })
+      .catch(() => {
+        if (!gone) setShown(src);
+      });
+    return () => {
+      gone = true;
+    };
+  }, [src, upright]);
 
   if (!src) {
     return (
@@ -60,7 +85,7 @@ export function DocImage({
             onClick={async () => {
               setSaving(true);
               try {
-                await saveImage(src, saveAs);
+                await saveImage(shown || src, saveAs);
               } finally {
                 setSaving(false);
               }
@@ -79,7 +104,7 @@ export function DocImage({
             onClick={async () => {
               setSaving(true);
               try {
-                await saveImage(src, saveAs);
+                await saveImage(shown || src, saveAs);
               } finally {
                 setSaving(false);
               }
@@ -95,7 +120,7 @@ export function DocImage({
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={src}
+          src={shown || src}
           alt={label}
           referrerPolicy="no-referrer"
           onError={() => setFailed(true)}

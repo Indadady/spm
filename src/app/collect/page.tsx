@@ -62,7 +62,13 @@ export default function CollectPage() {
                 </p>
               </Link>
               <div className="mt-1 flex justify-end gap-2">
-                <GroupCopyLink campaignId={c.id} ogSlot={c.ogSlot} label="자료 링크 복사" />
+                <GroupCopyLink campaignId={c.id} ogSlot={c.ogSlot} label="고객 링크 복사" />
+                <GroupCopyLink
+                  campaignId={c.id}
+                  ogSlot={c.ogSlot}
+                  kind="office"
+                  label="내부 직원 링크 복사"
+                />
                 <Button
                   type="button"
                   size="sm"

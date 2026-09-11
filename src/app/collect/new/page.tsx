@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { COLLECT_KINDS, newGroupId, publishCampaign, type CollectKind } from "@/lib/group-collect";
+import { COLLECT_KINDS, newGroupId, normalizeDepartPin, publishCampaign, validDepartPin, type CollectKind } from "@/lib/group-collect";
 import { randomKakaoOgSlot } from "@/lib/company";
 import { useGroupStore } from "@/lib/group-store";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,7 @@ export default function NewGroupCollectPage() {
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<CollectKind>("insurance");
   const [expected, setExpected] = useState("");
+  const [departPin, setDepartPin] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -35,6 +36,11 @@ export default function NewGroupCollectPage() {
           e.preventDefault();
           const name = title.trim();
           if (!name) return;
+          const pin = normalizeDepartPin(departPin);
+          if (!validDepartPin(pin)) {
+            setError("출발일 6자리를 넣어 주세요. 예: 270306");
+            return;
+          }
           const count = Number(expected);
           const campaign = {
             id: newGroupId(),
@@ -42,6 +48,7 @@ export default function NewGroupCollectPage() {
             kind,
             expectedCount: count > 0 ? count : undefined,
             ogSlot: randomKakaoOgSlot(),
+            departPin: pin,
             createdAt: new Date().toISOString(),
           };
           setSaving(true);
@@ -87,6 +94,23 @@ export default function NewGroupCollectPage() {
               </button>
             ))}
           </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="depart-pin">출발일 6자리 (내부 직원 비밀번호)</Label>
+          <Input
+            id="depart-pin"
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={6}
+            value={departPin}
+            onChange={(e) => setDepartPin(normalizeDepartPin(e.target.value))}
+            placeholder="270306"
+            required
+          />
+          <p className="text-xs text-muted-foreground">
+            출발전서류와 같습니다. 2027년 3월 6일 출발이면 270306입니다. 내부 직원이 자료를 볼 때 이 번호를
+            넣습니다.
+          </p>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="expected">예상 인원 (있으면)</Label>

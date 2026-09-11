@@ -1,17 +1,19 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { groupSharePath } from "@/lib/group-collect";
+import { groupOfficePath, groupSharePath } from "@/lib/group-collect";
 import { absoluteUrl } from "@/lib/paths";
 import { useState } from "react";
 
 export function GroupCopyLink({
   campaignId,
   ogSlot,
+  kind = "share",
   label = "링크 복사",
 }: {
   campaignId: string;
   ogSlot?: number;
+  kind?: "share" | "office";
   label?: string;
 }) {
   const [done, setDone] = useState(false);
@@ -23,7 +25,9 @@ export function GroupCopyLink({
       variant="outline"
       disabled={!campaignId}
       onClick={async () => {
-        const text = absoluteUrl(groupSharePath(campaignId, ogSlot));
+        const text = absoluteUrl(
+          kind === "office" ? groupOfficePath(campaignId, ogSlot) : groupSharePath(campaignId, ogSlot)
+        );
         try {
           await navigator.clipboard.writeText(text);
           setDone(true);

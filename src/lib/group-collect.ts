@@ -21,12 +21,16 @@ export type CollectKind = "insurance" | "passport" | "both";
 export type GroupRole = "guest" | "leader";
 export type InboxStatus = "connecting" | "live" | "local";
 
+export type PassportScanMark = "ok" | "partial" | "fail" | "manual";
+
 export type GroupCampaign = {
   id: string;
   title: string;
   kind: CollectKind;
   expectedCount?: number;
   ogSlot?: number;
+  /** 출발일 6자리 YYMMDD. 내부 직원이 자료를 볼 때 비밀번호로 씁니다. */
+  departPin?: string;
   createdAt: string;
 };
 
@@ -45,6 +49,7 @@ export type GroupEntry = {
   passportImageDataUrl?: string;
   passportImageUrl?: string;
   passportFileName?: string;
+  passportScan?: PassportScanMark;
   privacyAgreed: boolean;
   submittedAt?: string;
   source?: "firebase" | "local";
@@ -96,6 +101,52 @@ export function rosterDate(iso?: string) {
   return iso.replaceAll("-", ".");
 }
 
+export function normalizeDepartPin(raw: string) {
+  return raw.replace(/\D/g, "").slice(0, 6);
+}
+
+export function validDepartPin(raw: string) {
+  const d = normalizeDepartPin(raw);
+  if (d.length !== 6) return false;
+  const mm = Number(d.slice(2, 4));
+  const dd = Number(d.slice(4, 6));
+  return mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31;
+}
+
+/** 8001011234567 → 800101-1234567 */
+export function formatRrn(rrn?: string) {
+  const d = (rrn ?? "").replace(/\D/g, "");
+  if (d.length < 7) return (rrn ?? "").trim() || "";
+  return `${d.slice(0, 6)}-${d.slice(6)}`;
+}
+
+export function looksLikePassportName(name?: string) {
+  const n = (name ?? "").trim().toUpperCase().replace(/\s+/g, " ");
+  if (n.length < 4) return false;
+  const parts = n.split(" ");
+  if (parts.length >= 2 && parts.every((p) => /^[A-Z]{2,}$/.test(p))) return true;
+  return /^[A-Z]{2,12} [A-Z]{2,20}$/.test(n);
+}
+
+export function passportReadUnsure(row: GroupEntry) {
+  if (row.passportScan === "manual") return rowNeedsPassportScan(row);
+  if (row.passportScan === "partial" || row.passportScan === "fail") return true;
+  if (rowNeedsPassportScan(row)) return true;
+  if (row.passportScan === "ok") return !looksLikePassportName(row.passportName);
+  return !looksLikePassportName(row.passportName);
+}
+
+export function markPassportScan(
+  hit: { passportName?: string; passportNo?: string; passportExpiry?: string } | null
+): PassportScanMark {
+  if (!hit) return "fail";
+  if (hit.passportName && hit.passportNo && hit.passportExpiry && looksLikePassportName(hit.passportName)) {
+    return "ok";
+  }
+  if (hit.passportName || hit.passportNo || hit.passportExpiry) return "partial";
+  return "fail";
+}
+
 export function newGroupId() {
   const bytes = new Uint8Array(6);
   crypto.getRandomValues(bytes);
@@ -111,6 +162,11 @@ export function groupSharePath(id: string, slot?: number) {
 export function groupWatchPath(id: string, slot?: number) {
   const n = slot ?? randomKakaoOgSlot();
   return `/g/w/${n}/?id=${encodeURIComponent(id)}`;
+}
+
+export function groupOfficePath(id: string, slot?: number) {
+  const n = slot ?? randomKakaoOgSlot();
+  return `/g/o/${n}/?id=${encodeURIComponent(id)}`;
 }
 
 export function groupNoticeText(title: string, kind: CollectKind) {
@@ -163,12 +219,14 @@ function collectionPath(name: string) {
 export function campaignFromDoc(id: string, data: Record<string, unknown>): GroupCampaign {
   const expected = Number(data.expectedCount);
   const ogSlot = Number(data.ogSlot);
+  const departPin = normalizeDepartPin(String(data.departPin ?? data.pin ?? ""));
   return {
     id,
     title: String(data.title ?? ""),
     kind: parseKind(data.collectKind ?? data.kind),
     expectedCount: expected > 0 ? expected : undefined,
     ogSlot: ogSlot >= 1 && ogSlot <= 3 ? ogSlot : undefined,
+    departPin: validDepartPin(departPin) ? departPin : undefined,
     createdAt: String(data.createdAt ?? ""),
   };
 }
@@ -193,6 +251,13 @@ export function entryFromDoc(
     passportImageUrl: data.passportImageUrl ? String(data.passportImageUrl) : undefined,
     passportImageDataUrl: data.passportImageDataUrl ? String(data.passportImageDataUrl) : undefined,
     passportFileName: data.passportFileName ? String(data.passportFileName) : undefined,
+    passportScan:
+      data.passportScan === "ok" ||
+      data.passportScan === "partial" ||
+      data.passportScan === "fail" ||
+      data.passportScan === "manual"
+        ? data.passportScan
+        : undefined,
     privacyAgreed: Boolean(data.privacyAgreed),
     submittedAt: String(data.createdAt ?? data.submittedAt ?? ""),
     source,
@@ -243,6 +308,7 @@ export async function publishCampaign(campaign: GroupCampaign) {
       title: campaign.title,
       expectedCount: campaign.expectedCount ?? "",
       ogSlot: campaign.ogSlot ?? "",
+      departPin: campaign.departPin ?? "",
       createdAt: campaign.createdAt,
     }),
     8_000,
@@ -307,6 +373,7 @@ export async function submitGroupEntry(campaign: GroupCampaign, entry: GroupEntr
     passportFileName: originalFile?.name || entry.passportFileName || "",
     passportImageUrl,
     passportImageDataUrl: passportEmbed,
+    passportScan: entry.passportScan ?? "",
     privacyAgreed: entry.privacyAgreed,
     status: "completed",
   };
@@ -320,11 +387,28 @@ export async function submitGroupEntry(campaign: GroupCampaign, entry: GroupEntr
   }
 }
 
+export async function patchCampaign(
+  campaignId: string,
+  fields: Partial<Pick<GroupCampaign, "departPin" | "title" | "expectedCount">>
+) {
+  if (!campaignId) return;
+  await withTimeout(ensureAnonAuth(), 8_000, "auth");
+  const payload: Record<string, string | number> = {};
+  if (fields.departPin && validDepartPin(fields.departPin)) payload.departPin = normalizeDepartPin(fields.departPin);
+  if (fields.title) payload.title = fields.title;
+  if (fields.expectedCount) payload.expectedCount = fields.expectedCount;
+  if (Object.keys(payload).length === 0) return;
+  await withTimeout(updateDoc(doc(groupCampaignsCol(), campaignId), payload), 8_000, "save");
+}
+
 export async function patchGroupEntry(
   campaignId: string,
   entryId: string,
   fields: Partial<
-    Pick<GroupEntry, "passportName" | "passportNo" | "passportExpiry" | "birthDate" | "gender" | "nationality">
+    Pick<
+      GroupEntry,
+      "passportName" | "passportNo" | "passportExpiry" | "birthDate" | "gender" | "nationality" | "passportScan"
+    >
   >
 ) {
   if (!campaignId || !entryId) return;
@@ -336,12 +420,13 @@ export async function patchGroupEntry(
   if (fields.birthDate) payload.birthDate = fields.birthDate;
   if (fields.gender) payload.gender = fields.gender;
   if (fields.nationality) payload.nationality = fields.nationality;
+  if (fields.passportScan) payload.passportScan = fields.passportScan;
   if (Object.keys(payload).length === 0) return;
   await withTimeout(updateDoc(doc(groupEntriesCol(campaignId), entryId), payload), 8_000, "save");
 }
 
 export function rowNeedsPassportScan(row: GroupEntry) {
-  return !row.passportName || !row.passportNo || !row.passportExpiry;
+  return !row.passportName || row.passportName.trim().length < 3 || !row.passportNo || !row.passportExpiry;
 }
 
 export async function deleteGroupEntry(campaignId: string, entryId: string) {

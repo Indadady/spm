@@ -39,7 +39,9 @@ export function useGroupCampaign(id: string) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const campaign = remote ?? local;
+  const campaign = remote
+    ? { ...remote, departPin: remote.departPin || local?.departPin }
+    : local;
   const waiting = !ready || (!fetched && !campaign);
   return { campaign, waiting, missing: fetched && !campaign };
 }
