@@ -3,6 +3,7 @@
 import { CopyTextButton } from "@/components/copy-text-button";
 import { DocImage } from "@/components/doc-image";
 import { GroupPinGate } from "@/components/group-pin-gate";
+import { GroupStatusBoard } from "@/components/group-status-board";
 import { Button } from "@/components/ui/button";
 import {
   collectKindLabel,
@@ -39,6 +40,7 @@ import { GripVertical } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 
 function orderStorageKey(campaignId: string) {
@@ -98,6 +100,7 @@ export function CollectOpenView({
   const [savingOrder, setSavingOrder] = useState(false);
   const [orderDirty, setOrderDirty] = useState(false);
   const [orderSavedOk, setOrderSavedOk] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
   const orderReady = useRef(false);
   const savedOrderRef = useRef<string>("");
 
@@ -152,6 +155,20 @@ export function CollectOpenView({
     window.addEventListener("beforeunload", onLeave);
     return () => window.removeEventListener("beforeunload", onLeave);
   }, [orderDirty]);
+
+  useEffect(() => {
+    if (!statusOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setStatusOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [statusOpen]);
 
   const rows = useMemo(() => sortEntriesByOrder(inbox.rows, orderIds), [inbox.rows, orderIds]);
 
@@ -263,8 +280,13 @@ export function CollectOpenView({
             <div className="flex flex-wrap gap-2">
               <CopyTextButton text={shareUrl} label="고객 링크 복사" />
               <CopyTextButton text={officeUrl} label="내부 직원 링크 복사" />
-              <CopyTextButton text={watchUrl} label="담당자 현황 복사" />
+              <Button type="button" size="sm" variant="outline" onClick={() => setStatusOpen(true)}>
+                담당자 현황 보기
+              </Button>
             </div>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              담당자 현황은 화면에서 바로 보고 캡처해 보내면 됩니다. 주민번호·여권사진은 안 나갑니다.
+            </p>
           </div>
         )}
 
@@ -592,6 +614,37 @@ export function CollectOpenView({
           </>
         )}
       </div>
+
+      {statusOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-3 sm:p-6"
+              role="dialog"
+              aria-modal="true"
+              aria-label="담당자 제출 현황"
+              onClick={() => setStatusOpen(false)}
+            >
+              <div
+                className="my-4 w-full max-w-md"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-white/95 px-3 py-2 shadow">
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    아래 현황판을 캡처해 담당자에게 보내세요.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <CopyTextButton text={watchUrl} label="링크도 복사" />
+                    <Button type="button" size="sm" variant="outline" onClick={() => setStatusOpen(false)}>
+                      닫기
+                    </Button>
+                  </div>
+                </div>
+                <GroupStatusBoard campaign={campaign} rows={rows} />
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </GroupPinGate>
   );
 }
