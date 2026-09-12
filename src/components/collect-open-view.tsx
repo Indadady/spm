@@ -346,7 +346,7 @@ export function CollectOpenView({
         ) : (
           <>
             <p className="text-xs leading-relaxed text-muted-foreground">
-              왼쪽 ☰을 끌어 부부·부서 순으로 옮기면, 화면과 명단 엑셀 순서가 같이 바뀝니다.
+              왼쪽 ☰을 끌어 가족·부서 순으로 정리하면 바로 저장되고, 명단 엑셀 순서도 같습니다.
             </p>
             <ul className="space-y-2">
               {rows.map((row, index) => {
