@@ -2,12 +2,18 @@ import {
   mergePassportScan,
   parsePassportText,
   passportScanReady,
+  scorePassportScan,
   type PassportScan,
 } from "./passport-mrz";
 import { uprightPassportCanvas } from "./passport-orient";
 
 export type { PassportScan };
-export { passportScanReady, passportScanUseful, mergePassportScan } from "./passport-mrz";
+export {
+  passportScanReady,
+  passportScanUseful,
+  mergePassportScan,
+  scorePassportScan,
+} from "./passport-mrz";
 
 type TessWorker = {
   setParameters: (p: Record<string, string>) => Promise<void>;
@@ -28,6 +34,8 @@ const WORKER_PATH = `https://cdn.jsdelivr.net/npm/tesseract.js@${TESS_VER}/dist/
 const LANG_PATH = "https://tessdata.projectnaptha.com/4.0.0";
 const MRZ_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<";
 const NAME_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ ";
+/** 이름+번호+만료+생년 정도면 충분 */
+const READY_SCORE = 16;
 
 let workerPromise: Promise<TessWorker> | null = null;
 
@@ -140,7 +148,42 @@ function otsuThreshold(px: Uint8ClampedArray) {
   return thresh;
 }
 
-function grayContrast(canvas: HTMLCanvasElement, contrast: number, binary: boolean, invert: boolean) {
+function sharpen(canvas: HTMLCanvasElement) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return canvas;
+  const src = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const out = ctx.createImageData(canvas.width, canvas.height);
+  const s = src.data;
+  const d = out.data;
+  const w = canvas.width;
+  const h = canvas.height;
+  // 약한 unsharp: center*5 - neighbors
+  for (let y = 1; y < h - 1; y += 1) {
+    for (let x = 1; x < w - 1; x += 1) {
+      const i = (y * w + x) * 4;
+      for (const c of [0, 1, 2]) {
+        const v =
+          5 * (s[i + c] ?? 0) -
+          (s[i - 4 + c] ?? 0) -
+          (s[i + 4 + c] ?? 0) -
+          (s[i - w * 4 + c] ?? 0) -
+          (s[i + w * 4 + c] ?? 0);
+        d[i + c] = Math.max(0, Math.min(255, v));
+      }
+      d[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(out, 0, 0);
+  return canvas;
+}
+
+function grayContrast(
+  canvas: HTMLCanvasElement,
+  contrast: number,
+  binary: boolean,
+  invert: boolean,
+  threshBias = 0
+) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return canvas;
   const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -153,7 +196,7 @@ function grayContrast(canvas: HTMLCanvasElement, contrast: number, binary: boole
     px[i + 2] = v;
   }
   if (binary) {
-    const cut = otsuThreshold(px);
+    const cut = Math.max(20, Math.min(235, otsuThreshold(px) + threshBias));
     for (let i = 0; i < px.length; i += 4) {
       const v = (px[i] ?? 0) >= cut ? 255 : 0;
       px[i] = v;
@@ -174,20 +217,35 @@ function grayContrast(canvas: HTMLCanvasElement, contrast: number, binary: boole
 
 function copyRegion(
   src: HTMLCanvasElement,
-  opts: { top: number; height: number; max: number; contrast: number; binary?: boolean; invert?: boolean }
+  opts: {
+    top: number;
+    height: number;
+    max: number;
+    contrast: number;
+    binary?: boolean;
+    invert?: boolean;
+    insetX?: number;
+    threshBias?: number;
+    doSharpen?: boolean;
+  }
 ) {
+  const inset = opts.insetX ?? 0.02;
+  const sx = Math.floor(src.width * inset);
+  const sw = Math.max(8, Math.floor(src.width * (1 - inset * 2)));
   const sy = Math.floor(src.height * opts.top);
   const sh = Math.max(8, Math.floor(src.height * opts.height));
-  const scale = Math.min(3, opts.max / Math.max(src.width, sh));
+  const scale = Math.min(3.2, opts.max / Math.max(sw, sh));
   const canvas = document.createElement("canvas");
-  canvas.width = Math.max(8, Math.round(src.width * scale));
+  canvas.width = Math.max(8, Math.round(sw * scale));
   canvas.height = Math.max(8, Math.round(sh * scale));
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("캔버스를 만들지 못했습니다.");
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(src, 0, sy, src.width, sh, 0, 0, canvas.width, canvas.height);
-  return grayContrast(canvas, opts.contrast, Boolean(opts.binary), Boolean(opts.invert));
+  ctx.drawImage(src, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+  grayContrast(canvas, opts.contrast, Boolean(opts.binary), Boolean(opts.invert), opts.threshBias ?? 0);
+  if (opts.doSharpen) sharpen(canvas);
+  return canvas;
 }
 
 function rotateCanvas(src: HTMLCanvasElement, deg: number) {
@@ -208,7 +266,7 @@ function rotateCanvas(src: HTMLCanvasElement, deg: number) {
 
 function mrzBand(src: HTMLCanvasElement) {
   const sample = document.createElement("canvas");
-  const scale = Math.min(1, 480 / Math.max(src.width, src.height));
+  const scale = Math.min(1, 560 / Math.max(src.width, src.height));
   sample.width = Math.max(8, Math.round(src.width * scale));
   sample.height = Math.max(8, Math.round(src.height * scale));
   const ctx = sample.getContext("2d");
@@ -227,22 +285,25 @@ function mrzBand(src: HTMLCanvasElement) {
     }
     energy[y] = sum / sample.width;
   }
-  const win = Math.max(10, Math.round(sample.height * 0.12));
+  // MRZ는 보통 하단 — 아래쪽 60%에서만 탐색
+  const yMin = Math.floor(sample.height * 0.45);
+  const win = Math.max(10, Math.round(sample.height * 0.11));
   let best = 0;
-  let bestAt = Math.floor(sample.height * 0.7);
+  let bestAt = Math.floor(sample.height * 0.72);
   let run = 0;
-  for (let y = 0; y < win; y += 1) run += energy[y] ?? 0;
+  for (let y = yMin; y < Math.min(sample.height, yMin + win); y += 1) run += energy[y] ?? 0;
   best = run;
-  for (let y = win; y < sample.height; y += 1) {
+  bestAt = yMin;
+  for (let y = yMin + win; y < sample.height; y += 1) {
     run += (energy[y] ?? 0) - (energy[y - win] ?? 0);
     if (run > best) {
       best = run;
       bestAt = y - win + 1;
     }
   }
-  const top = Math.max(0, bestAt / sample.height - 0.03);
-  const height = Math.min(0.45, 1 - top);
-  return { top, height: Math.max(0.16, height) };
+  const top = Math.max(0.5, bestAt / sample.height - 0.02);
+  const height = Math.min(0.42, 1 - top);
+  return { top, height: Math.max(0.14, height) };
 }
 
 async function tessWorker() {
@@ -264,6 +325,7 @@ async function tessWorker() {
         await worker.setParameters({
           tessedit_char_whitelist: MRZ_CHARS,
           tessedit_pageseg_mode: "6",
+          preserve_interword_spaces: "0",
         });
         return worker;
       } catch (err) {
@@ -280,9 +342,29 @@ async function readCanvas(canvas: HTMLCanvasElement, psm: string, whitelist: str
   await worker.setParameters({
     tessedit_char_whitelist: whitelist,
     tessedit_pageseg_mode: psm,
+    preserve_interword_spaces: whitelist.includes(" ") ? "1" : "0",
   });
   const { data } = await worker.recognize(canvas);
   return data.text ?? "";
+}
+
+type TryOpt = {
+  top: number;
+  height: number;
+  max: number;
+  contrast: number;
+  binary?: boolean;
+  invert?: boolean;
+  psm: string;
+  rotate?: number;
+  names?: boolean;
+  insetX?: number;
+  threshBias?: number;
+  doSharpen?: boolean;
+};
+
+function isStrong(scan: PassportScan | null) {
+  return scorePassportScan(scan) >= READY_SCORE && passportScanReady(scan);
 }
 
 export async function scanPassportImage(input: File | string): Promise<PassportScan | null> {
@@ -291,33 +373,44 @@ export async function scanPassportImage(input: File | string): Promise<PassportS
     const raw = await canvasFromBlob(blob);
     const img = uprightPassportCanvas(raw).canvas;
     const band = mrzBand(img);
-    const tries: Array<{
-      top: number;
-      height: number;
-      max: number;
-      contrast: number;
-      binary?: boolean;
-      invert?: boolean;
-      psm: string;
-      rotate?: number;
-      names?: boolean;
-    }> = [
-      { ...band, max: 2200, contrast: 1.35, binary: true, psm: "6" },
-      { ...band, max: 2000, contrast: 1.55, psm: "6" },
-      { top: 0.58, height: 0.42, max: 2000, contrast: 1.45, psm: "6" },
-      { top: 0.08, height: 0.58, max: 1600, contrast: 1.2, psm: "6", names: true },
-      { ...band, max: 1800, contrast: 1.3, binary: true, invert: true, psm: "6" },
-      { ...band, max: 2200, contrast: 1.4, binary: true, psm: "7", rotate: -3 },
-      { ...band, max: 2200, contrast: 1.4, binary: true, psm: "7", rotate: 3 },
-      { top: 0, height: 1, max: 1400, contrast: 1.15, psm: "6" },
+    // 두 줄로 나눠 읽으면 번호·생년·성별·만료 정확도가 올라갑니다.
+    const lineH = Math.max(0.07, band.height * 0.48);
+    const line1Top = band.top;
+    const line2Top = Math.min(0.92, band.top + band.height * 0.48);
+
+    const tries: TryOpt[] = [
+      // 2행(번호·생년·성별·만료) 우선 — 체크디지트로 검증 가능
+      { top: line2Top, height: lineH + 0.02, max: 2800, contrast: 1.4, binary: true, psm: "7", doSharpen: true },
+      { top: line2Top, height: lineH + 0.02, max: 2600, contrast: 1.55, binary: true, psm: "7", threshBias: -12 },
+      { top: line2Top, height: lineH + 0.02, max: 2600, contrast: 1.45, binary: true, psm: "7", threshBias: 12 },
+      { top: line2Top, height: lineH + 0.03, max: 2400, contrast: 1.5, psm: "7", doSharpen: true },
+      { top: line2Top, height: lineH + 0.02, max: 2600, contrast: 1.4, binary: true, invert: true, psm: "7" },
+      { top: line2Top, height: lineH + 0.02, max: 2600, contrast: 1.4, binary: true, psm: "7", rotate: -2 },
+      { top: line2Top, height: lineH + 0.02, max: 2600, contrast: 1.4, binary: true, psm: "7", rotate: 2 },
+      // 1행(영문명)
+      { top: line1Top, height: lineH + 0.02, max: 2800, contrast: 1.35, binary: true, psm: "7", doSharpen: true },
+      { top: line1Top, height: lineH + 0.02, max: 2400, contrast: 1.5, binary: true, psm: "7" },
+      { top: line1Top, height: lineH + 0.03, max: 2400, contrast: 1.4, psm: "7" },
+      // 밴드 전체
+      { ...band, max: 2600, contrast: 1.4, binary: true, psm: "6", doSharpen: true },
+      { ...band, max: 2400, contrast: 1.55, binary: true, psm: "6" },
+      { ...band, max: 2200, contrast: 1.45, psm: "6" },
+      { top: 0.58, height: 0.4, max: 2400, contrast: 1.4, binary: true, psm: "6" },
+      { top: 0.55, height: 0.44, max: 2200, contrast: 1.35, binary: true, invert: true, psm: "6" },
+      // 시각 영문명(MRZ 위)
+      { top: 0.12, height: 0.5, max: 1800, contrast: 1.25, psm: "6", names: true, insetX: 0.08 },
+      { top: 0.2, height: 0.4, max: 1600, contrast: 1.3, binary: true, psm: "6", names: true, insetX: 0.1 },
+      { top: 0, height: 1, max: 1600, contrast: 1.15, psm: "6" },
     ];
+
     let best: PassportScan | null = null;
     for (const tryOn of tries) {
       const region = copyRegion(img, tryOn);
       const canvas = rotateCanvas(region, tryOn.rotate ?? 0);
       const text = await readCanvas(canvas, tryOn.psm, tryOn.names ? NAME_CHARS : MRZ_CHARS);
-      best = mergePassportScan(best, parsePassportText(text));
-      if (passportScanReady(best)) return best;
+      const hit = parsePassportText(text);
+      best = mergePassportScan(best, hit);
+      if (isStrong(best)) return best;
     }
     return best;
   } catch {

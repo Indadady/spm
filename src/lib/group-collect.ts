@@ -14,7 +14,7 @@ import {
 import { getDownloadURL, ref, uploadBytes, uploadString } from "firebase/storage";
 import { randomKakaoOgSlot } from "./company";
 import { ensureAnonAuth, getFirebase, SURVEY_APP_ID } from "./firebase";
-import { dataUrlBytes, fileForDownload } from "./image-file";
+import { dataUrlBytes, fileForDownload, shrinkDataUrl } from "./image-file";
 import { buildRosterXlsx, type RosterSheet } from "./roster-xlsx";
 
 export type CollectKind = "insurance" | "passport" | "both";
@@ -444,7 +444,15 @@ export async function patchGroupEntry(
   fields: Partial<
     Pick<
       GroupEntry,
-      "passportName" | "passportNo" | "passportExpiry" | "birthDate" | "gender" | "nationality" | "passportScan"
+      | "passportName"
+      | "passportNo"
+      | "passportExpiry"
+      | "birthDate"
+      | "gender"
+      | "nationality"
+      | "passportScan"
+      | "passportImageUrl"
+      | "passportImageDataUrl"
     >
   >
 ) {
@@ -458,8 +466,61 @@ export async function patchGroupEntry(
   if (fields.gender) payload.gender = fields.gender;
   if (fields.nationality) payload.nationality = fields.nationality;
   if (fields.passportScan) payload.passportScan = fields.passportScan;
+  if (fields.passportImageUrl) payload.passportImageUrl = fields.passportImageUrl;
+  if (fields.passportImageDataUrl !== undefined) {
+    payload.passportImageDataUrl = fields.passportImageDataUrl || "";
+  }
   if (Object.keys(payload).length === 0) return;
   await withTimeout(updateDoc(doc(groupEntriesCol(campaignId), entryId), payload), 8_000, "save");
+}
+
+/** 회전·보정한 여권 사진을 원본 화질로 다시 올리고 저장합니다. */
+export async function replaceGroupPassportImage(
+  campaignId: string,
+  entryId: string,
+  blob: Blob,
+  fileName = "passport.jpg"
+) {
+  if (!campaignId || !entryId) throw new Error("저장할 대상이 없습니다.");
+  await withTimeout(ensureAnonAuth(), 8_000, "auth");
+  const { storage } = getFirebase();
+  if (!storage) throw new Error("저장소를 쓰지 못했습니다.");
+  const ext = (fileName.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "").slice(0, 5) || "jpg";
+  const path = `artifacts/${SURVEY_APP_ID}/public/spm/g/${campaignId}/${Date.now()}-passport.${ext}`;
+  const fileRef = ref(storage, path);
+  await withTimeout(
+    uploadBytes(fileRef, blob, {
+      contentType: blob.type || "image/jpeg",
+      customMetadata: { originalName: fileName },
+    }),
+    60_000,
+    "upload"
+  );
+  const passportImageUrl = await withTimeout(getDownloadURL(fileRef), 8_000, "url");
+  let passportImageDataUrl = "";
+  try {
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("preview"));
+      reader.readAsDataURL(blob);
+    });
+    if (dataUrlBytes(dataUrl) <= 220_000) {
+      passportImageDataUrl = dataUrl;
+    } else {
+      passportImageDataUrl = await shrinkDataUrl(dataUrl, 720, 0.55);
+      if (dataUrlBytes(passportImageDataUrl) > 220_000) {
+        passportImageDataUrl = await shrinkDataUrl(dataUrl, 480, 0.4);
+      }
+    }
+  } catch {
+    passportImageDataUrl = "";
+  }
+  await patchGroupEntry(campaignId, entryId, {
+    passportImageUrl,
+    passportImageDataUrl,
+  });
+  return { passportImageUrl, passportImageDataUrl };
 }
 
 export function rowNeedsPassportScan(row: GroupEntry) {

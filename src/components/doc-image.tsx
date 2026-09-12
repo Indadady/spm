@@ -1,10 +1,14 @@
 "use client";
 
-import { rotateImageSrc, uprightImageSrc, type Rotation } from "@/lib/passport-orient";
-import { useEffect, useRef, useState } from "react";
+import {
+  bakeRotatedImage,
+  detectImageRotation,
+  type Rotation,
+} from "@/lib/passport-orient";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-async function saveImage(src: string, fileName: string) {
+async function downloadImage(src: string, fileName: string) {
   const a = document.createElement("a");
   a.download = fileName;
   if (src.startsWith("data:")) {
@@ -40,6 +44,7 @@ export function DocImage({
   fileName,
   download = true,
   upright = false,
+  onPersist,
 }: {
   src?: string;
   label: string;
@@ -47,56 +52,55 @@ export function DocImage({
   fileName?: string;
   download?: boolean;
   upright?: boolean;
+  /** 회전·보정한 원본 JPEG를 서버에 저장. 새 URL을 돌려주면 화면도 바꿉니다. */
+  onPersist?: (blob: Blob) => Promise<string | void>;
 }) {
   const [failed, setFailed] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [open, setOpen] = useState(false);
-  const [zoom, setZoom] = useState(1.5);
+  const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [turn, setTurn] = useState<Rotation>(0);
-  const [cssTurn, setCssTurn] = useState<Rotation>(0);
-  const [rotating, setRotating] = useState(false);
-  const [base, setBase] = useState(src ?? "");
-  const [shown, setShown] = useState(src ?? "");
+  const [natural, setNatural] = useState({ w: 0, h: 0 });
+  const [persisting, setPersisting] = useState(false);
+  const [persistMsg, setPersistMsg] = useState("");
+  const [viewSrc, setViewSrc] = useState(src ?? "");
   const drag = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const pinch = useRef<{ dist: number; zoom: number } | null>(null);
+  const persistSeq = useRef(0);
   const saveAs = (fileName || `${label}.jpg`).replace(/[\\/:*?"<>|]+/g, "_");
-  const viewSrc = shown || src || "";
 
   useEffect(() => {
     setFailed(false);
     setTurn(0);
-    setCssTurn(0);
+    setNatural({ w: 0, h: 0 });
+    setPersistMsg("");
     if (!src) {
-      setBase("");
-      setShown("");
+      setViewSrc("");
       return;
     }
-    setBase(src);
-    setShown(src);
+    setViewSrc(src);
     if (!upright) return;
     let gone = false;
-    void uprightImageSrc(src)
-      .then((next) => {
-        if (!gone) {
-          setBase(next);
-          setShown(next);
-        }
+    void detectImageRotation(src)
+      .then((deg) => {
+        if (gone || !deg) return;
+        setTurn(deg);
+        if (onPersist) void persistRotation(src, deg);
       })
       .catch(() => {
-        if (!gone) {
-          setBase(src);
-          setShown(src);
-        }
+        /* keep as-is */
       });
     return () => {
       gone = true;
     };
+    // onPersist는 매 렌더 새 함수일 수 있어 src/upright만 본다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src, upright]);
 
   useEffect(() => {
     if (!open) {
-      setZoom(1.5);
+      setZoom(1);
       setPan({ x: 0, y: 0 });
       drag.current = null;
       pinch.current = null;
@@ -104,9 +108,7 @@ export function DocImage({
     }
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
-      if (e.key === "+" || e.key === "=") {
-        setZoom((z) => clampZoom(z + 0.25));
-      }
+      if (e.key === "+" || e.key === "=") setZoom((z) => clampZoom(z + 0.25));
       if (e.key === "-" || e.key === "_") {
         setZoom((z) => {
           const next = clampZoom(z - 0.25);
@@ -115,7 +117,7 @@ export function DocImage({
         });
       }
       if (e.key === "0") {
-        setZoom(1.5);
+        setZoom(1);
         setPan({ x: 0, y: 0 });
       }
     };
@@ -128,20 +130,40 @@ export function DocImage({
     };
   }, [open]);
 
-  async function rotateBy(deg: 90 | 180 | 270) {
-    if (!base || rotating) return;
-    const next = nextTurn(turn, deg);
-    setRotating(true);
+  async function persistRotation(source: string, deg: Rotation) {
+    if (!onPersist || !deg) return;
+    const seq = ++persistSeq.current;
+    setPersisting(true);
+    setPersistMsg("저장 중…");
     try {
-      setShown(next ? await rotateImageSrc(base, next) : base);
-      setTurn(next);
-      setCssTurn(0);
+      const blob = await bakeRotatedImage(source, deg, 0.92);
+      if (seq !== persistSeq.current) return;
+      const nextUrl = await onPersist(blob);
+      if (seq !== persistSeq.current) return;
+      if (nextUrl) {
+        setViewSrc(nextUrl);
+        setTurn(0);
+        setNatural({ w: 0, h: 0 });
+      } else {
+        setTurn(0);
+      }
+      setPersistMsg("저장됨");
+      window.setTimeout(() => setPersistMsg(""), 1_600);
     } catch {
-      setTurn(next);
-      setCssTurn(next);
-      setShown(base);
+      setPersistMsg("저장 실패 · 다시 회전해 주세요");
     } finally {
-      setRotating(false);
+      if (seq === persistSeq.current) setPersisting(false);
+    }
+  }
+
+  async function rotateBy(deg: 90 | 180 | 270) {
+    if (!viewSrc || persisting) return;
+    const next = nextTurn(turn, deg);
+    setTurn(next);
+    if (onPersist && next) {
+      await persistRotation(viewSrc, next);
+    } else if (onPersist && !next) {
+      setPersistMsg("");
     }
   }
 
@@ -153,6 +175,22 @@ export function DocImage({
     });
   }
 
+  const display = useMemo(() => {
+    if (!natural.w || !natural.h || typeof window === "undefined") {
+      return { w: undefined as number | undefined, h: undefined as number | undefined };
+    }
+    const vw = window.innerWidth * 0.94;
+    const vh = window.innerHeight * 0.88;
+    const swapped = turn === 90 || turn === 270;
+    const boxW = swapped ? natural.h : natural.w;
+    const boxH = swapped ? natural.w : natural.h;
+    const fit = Math.min(vw / boxW, vh / boxH, 1);
+    return {
+      w: Math.max(1, Math.round(boxW * fit * zoom)),
+      h: Math.max(1, Math.round(boxH * fit * zoom)),
+    };
+  }, [natural.h, natural.w, turn, zoom]);
+
   if (!src) {
     return (
       <div className="rounded-xl border border-dashed px-4 py-5 text-center text-sm text-muted-foreground">
@@ -161,14 +199,15 @@ export function DocImage({
     );
   }
 
-  const imgStyle = cssTurn
-    ? { transform: `rotate(${cssTurn}deg)` }
-    : undefined;
+  const thumbStyle = turn ? { transform: `rotate(${turn}deg)` } : undefined;
 
   return (
     <div>
       <div className="mb-1 flex items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="text-xs text-muted-foreground">
+          {label}
+          {persistMsg ? ` · ${persistMsg}` : ""}
+        </p>
         <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
           <button
             type="button"
@@ -179,27 +218,32 @@ export function DocImage({
           </button>
           <button
             type="button"
-            disabled={rotating}
+            disabled={persisting}
             className="text-xs font-medium text-[color:var(--navy)] underline disabled:opacity-50"
             onClick={() => void rotateBy(90)}
           >
-            {rotating ? "돌리는 중…" : "회전"}
+            {persisting ? "저장 중…" : "회전"}
           </button>
           {download ? (
             <button
               type="button"
-              disabled={saving}
+              disabled={downloading}
               className="text-xs font-medium text-[color:var(--navy)] underline disabled:opacity-50"
               onClick={async () => {
-                setSaving(true);
+                setDownloading(true);
                 try {
-                  await saveImage(viewSrc, saveAs);
+                  const out =
+                    turn && viewSrc
+                      ? URL.createObjectURL(await bakeRotatedImage(viewSrc, turn, 0.92))
+                      : viewSrc;
+                  await downloadImage(out, saveAs);
+                  if (out.startsWith("blob:")) URL.revokeObjectURL(out);
                 } finally {
-                  setSaving(false);
+                  setDownloading(false);
                 }
               }}
             >
-              {saving ? "받는 중…" : "다운로드"}
+              {downloading ? "받는 중…" : "다운로드"}
             </button>
           ) : null}
         </div>
@@ -208,18 +252,18 @@ export function DocImage({
         download ? (
           <button
             type="button"
-            disabled={saving}
+            disabled={downloading}
             className="block w-full rounded-xl border px-4 py-5 text-center text-sm font-medium text-[color:var(--navy)] underline disabled:opacity-50"
             onClick={async () => {
-              setSaving(true);
+              setDownloading(true);
               try {
-                await saveImage(viewSrc, saveAs);
+                await downloadImage(viewSrc, saveAs);
               } finally {
-                setSaving(false);
+                setDownloading(false);
               }
             }}
           >
-            {saving ? "받는 중…" : "사진이 안 보이면 다운로드로 받으세요"}
+            {downloading ? "받는 중…" : "사진이 안 보이면 다운로드로 받으세요"}
           </button>
         ) : (
           <p className="rounded-xl border px-4 py-5 text-center text-sm text-muted-foreground">
@@ -234,10 +278,16 @@ export function DocImage({
             alt={label}
             referrerPolicy="no-referrer"
             onError={() => setFailed(true)}
-            style={imgStyle}
+            onLoad={(e) => {
+              const el = e.currentTarget;
+              setNatural({ w: el.naturalWidth || 0, h: el.naturalHeight || 0 });
+            }}
+            style={thumbStyle}
             className="max-h-80 w-full cursor-zoom-in rounded-xl border bg-white object-contain"
           />
-          <p className="mt-1 text-center text-[11px] text-muted-foreground">눌러서 화면에서 확대 · 다운로드 없이 확인</p>
+          <p className="mt-1 text-center text-[11px] text-muted-foreground">
+            눌러서 원본 화질로 확대 · 회전은 자동 저장
+          </p>
         </button>
       )}
       {open && viewSrc && typeof document !== "undefined"
@@ -306,7 +356,7 @@ export function DocImage({
                   pinch.current = null;
                 }}
               >
-                <div className="flex h-full w-full items-center justify-center p-4 sm:p-8">
+                <div className="flex h-full w-full items-center justify-center p-3 sm:p-6">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={viewSrc}
@@ -314,13 +364,17 @@ export function DocImage({
                     referrerPolicy="no-referrer"
                     draggable={false}
                     onClick={(e) => e.stopPropagation()}
+                    onLoad={(e) => {
+                      const el = e.currentTarget;
+                      setNatural({ w: el.naturalWidth || 0, h: el.naturalHeight || 0 });
+                    }}
                     style={{
-                      transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})${
-                        cssTurn ? ` rotate(${cssTurn}deg)` : ""
-                      }`,
+                      width: display.w ? `${display.w}px` : undefined,
+                      height: display.h ? `${display.h}px` : undefined,
+                      maxWidth: display.w ? "none" : "94vw",
+                      maxHeight: display.h ? "none" : "88vh",
+                      transform: `translate(${pan.x}px, ${pan.y}px)${turn ? ` rotate(${turn}deg)` : ""}`,
                       transformOrigin: "center center",
-                      maxHeight: "88vh",
-                      maxWidth: "min(96vw, 56rem)",
                       cursor: zoom > 1 ? "grab" : "zoom-in",
                     }}
                     className="select-none rounded-lg bg-white object-contain shadow-lg"
@@ -329,7 +383,9 @@ export function DocImage({
               </div>
               <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3 sm:p-4">
                 <p className="rounded-full bg-black/55 px-3 py-1.5 text-xs text-white">
-                  {Math.round(zoom * 100)}% · 드래그로 이동 · 휠/핀치 확대
+                  {Math.round(zoom * 100)}%
+                  {natural.w ? ` · 원본 ${natural.w}×${natural.h}` : ""}
+                  {persistMsg ? ` · ${persistMsg}` : " · 휠/핀치 확대"}
                 </p>
                 <div className="pointer-events-auto flex flex-col gap-2">
                   <button
@@ -353,7 +409,7 @@ export function DocImage({
                     type="button"
                     className="rounded-full bg-white px-3 py-2 text-sm font-semibold text-[color:var(--navy)] shadow"
                     onClick={() => {
-                      setZoom(1.5);
+                      setZoom(1);
                       setPan({ x: 0, y: 0 });
                     }}
                   >
@@ -361,11 +417,11 @@ export function DocImage({
                   </button>
                   <button
                     type="button"
-                    disabled={rotating}
+                    disabled={persisting}
                     className="rounded-full bg-white px-3 py-2 text-sm font-semibold text-[color:var(--navy)] shadow disabled:opacity-50"
                     onClick={() => void rotateBy(90)}
                   >
-                    {rotating ? "…" : "회전"}
+                    {persisting ? "…" : "회전"}
                   </button>
                   <button
                     type="button"

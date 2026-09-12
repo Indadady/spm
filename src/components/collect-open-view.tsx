@@ -24,6 +24,7 @@ import {
   parseRrnMeta,
   patchCampaign,
   patchGroupEntry,
+  replaceGroupPassportImage,
   rosterDate,
   rowNeedsPassportScan,
   sortEntriesByOrder,
@@ -496,6 +497,19 @@ export function CollectOpenView({
                                 label="여권 사진"
                                 empty="여권 사진이 없습니다."
                                 fileName={`${row.name}-여권${passExt}`}
+                                onPersist={
+                                  row.remoteId
+                                    ? async (blob) => {
+                                        const saved = await replaceGroupPassportImage(
+                                          campaign.id,
+                                          row.remoteId ?? "",
+                                          blob,
+                                          `${row.name}-여권.jpg`
+                                        );
+                                        return saved.passportImageUrl;
+                                      }
+                                    : undefined
+                                }
                               />
                             </div>
                           </>

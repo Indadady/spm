@@ -286,6 +286,36 @@ function betterNo(a: string, b: string) {
   return score(nb) > score(na) ? nb : na;
 }
 
+function betterExpiry(a: string, b: string) {
+  // ISO 날짜: 둘 다 있으면 더 먼 만료(일반적)보다 형식·합리성
+  const ok = (iso: string) => /^\d{4}-\d{2}-\d{2}$/.test(iso);
+  if (ok(a) && !ok(b)) return a;
+  if (ok(b) && !ok(a)) return b;
+  return a || b;
+}
+
+function betterBirth(a: string, b: string) {
+  const ok = (iso: string) => /^\d{4}-\d{2}-\d{2}$/.test(iso);
+  if (ok(a) && !ok(b)) return a;
+  if (ok(b) && !ok(a)) return b;
+  return a || b;
+}
+
+export function scorePassportScan(scan: PassportScan | null | undefined) {
+  if (!scan) return 0;
+  let score = 0;
+  if (nameLooksGood(scan.passportName)) score += 6;
+  else if (scan.passportName) score += 1;
+  const no = scan.passportNo.replace(/[^A-Z0-9]/gi, "").toUpperCase();
+  if (/^[A-Z]{2}\d{7}$/.test(no) || /^[A-Z]\d{8}$/.test(no)) score += 6;
+  else if (no.length >= 8) score += 2;
+  if (scan.passportExpiry) score += 5;
+  if (scan.birthDate) score += 3;
+  if (scan.gender === "M" || scan.gender === "F") score += 2;
+  if (scan.nationality === "KOR") score += 1;
+  return score;
+}
+
 export function mergePassportScan(
   a: PassportScan | null | undefined,
   b: PassportScan | null | undefined
@@ -294,11 +324,34 @@ export function mergePassportScan(
   if (!passportScanUseful(b)) return { ...(a as PassportScan) };
   const left = a as PassportScan;
   const right = b as PassportScan;
+  const leftScore = scorePassportScan(left);
+  const rightScore = scorePassportScan(right);
+  // 한쪽이 확연히 좋으면 그쪽 필드를 우선
+  if (rightScore >= leftScore + 4) {
+    return {
+      passportName: betterName(right.passportName, left.passportName),
+      passportNo: betterNo(right.passportNo, left.passportNo),
+      passportExpiry: betterExpiry(right.passportExpiry, left.passportExpiry),
+      birthDate: betterBirth(right.birthDate, left.birthDate),
+      gender: right.gender || left.gender,
+      nationality: right.nationality || left.nationality || "KOR",
+    };
+  }
+  if (leftScore >= rightScore + 4) {
+    return {
+      passportName: betterName(left.passportName, right.passportName),
+      passportNo: betterNo(left.passportNo, right.passportNo),
+      passportExpiry: betterExpiry(left.passportExpiry, right.passportExpiry),
+      birthDate: betterBirth(left.birthDate, right.birthDate),
+      gender: left.gender || right.gender,
+      nationality: left.nationality || right.nationality || "KOR",
+    };
+  }
   return {
     passportName: betterName(left.passportName, right.passportName),
     passportNo: betterNo(left.passportNo, right.passportNo),
-    passportExpiry: left.passportExpiry || right.passportExpiry,
-    birthDate: left.birthDate || right.birthDate,
+    passportExpiry: betterExpiry(left.passportExpiry, right.passportExpiry),
+    birthDate: betterBirth(left.birthDate, right.birthDate),
     gender: left.gender || right.gender,
     nationality: left.nationality || right.nationality || "KOR",
   };
@@ -360,6 +413,28 @@ function repairByCheck(field: string, check: string) {
     }
     chars[i] = cur;
   }
+  // 한 글자로 안 되면 인접 두 글자 혼동을 같이 시도(생년·만료 6자리)
+  if (field.length <= 9) {
+    for (let i = 0; i < chars.length; i += 1) {
+      const curI = chars[i] ?? "";
+      const altsI = CONFUSE[curI] ?? [curI];
+      for (const altI of altsI) {
+        chars[i] = altI;
+        for (let j = i + 1; j < chars.length; j += 1) {
+          const curJ = chars[j] ?? "";
+          const altsJ = CONFUSE[curJ];
+          if (!altsJ) continue;
+          for (const altJ of altsJ) {
+            chars[j] = altJ;
+            const next = chars.join("");
+            if (mrzCheckDigit(next) === check) return next;
+          }
+          chars[j] = curJ;
+        }
+      }
+      chars[i] = curI;
+    }
+  }
   return field;
 }
 
@@ -410,9 +485,10 @@ function fixLine2(line: string) {
   const birth = repairByCheck(asDigits(joined.slice(13, 19)), checkBirth);
   let sex = joined[20] ?? "<";
   if (sex === "N" || sex === "H") sex = "M";
-  if (sex === "E" || sex === "P") sex = "F";
-  if (sex !== "M" && sex !== "F" && sex !== "<") {
-    sex = sex === "W" ? "F" : "M";
+  else if (sex === "E" || sex === "P" || sex === "W") sex = "F";
+  else if (sex !== "M" && sex !== "F" && sex !== "<") {
+    // 추측으로 M을 넣지 않음 — 잘못된 성별이 엑셀에 고정되는 것을 막음
+    sex = "<";
   }
   const exp = repairByCheck(asDigits(joined.slice(21, 27)), checkExp);
   const rest = joined.slice(28);
@@ -465,7 +541,8 @@ function parsePair(line1: string, line2raw: string): { scan: PassportScan; score
   if (line2Score >= 4 && l2) {
     const scan = scanFromLine2(l2, nameLooksGood(name) ? name : "");
     if (!scan) return null;
-    return { score: line2Score + (nameLooksGood(name) ? 2 : 0), scan };
+    // 체크디지트가 많이 맞을수록 가점
+    return { score: line2Score + (nameLooksGood(name) ? 3 : 0) + scorePassportScan(scan), scan };
   }
   if (nameLooksGood(name) && (l1.startsWith("P<") || l1.startsWith("P"))) {
     return {

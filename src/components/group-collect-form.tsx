@@ -14,7 +14,7 @@ import {
 } from "@/lib/group-collect";
 import { fileToJpeg } from "@/lib/image-file";
 import { ensureAnonAuth } from "@/lib/firebase";
-import { scanPassportImage, type PassportScan } from "@/lib/passport-scan";
+import { scanPassportImage, scorePassportScan, type PassportScan } from "@/lib/passport-scan";
 import { uprightPassportFile } from "@/lib/passport-orient";
 import { cn } from "@/lib/utils";
 import { ImagePlus } from "lucide-react";
@@ -179,7 +179,13 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
                   scanWait.current = pending;
                   const hit = await pending;
                   setScan(hit);
-                  setScanState(hit?.passportName && hit.passportNo && hit.passportExpiry ? "ok" : hit ? "partial" : "fail");
+                  setScanState(
+                    hit && scorePassportScan(hit) >= 16 && hit.passportName && hit.passportNo && hit.passportExpiry
+                      ? "ok"
+                      : hit
+                        ? "partial"
+                        : "fail"
+                  );
                 } catch {
                   setScanState("fail");
                   setError("여권 사진을 다시 선택해 주세요.");

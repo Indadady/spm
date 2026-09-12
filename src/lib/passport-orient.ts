@@ -98,6 +98,20 @@ export async function canvasToJpegUrl(canvas: HTMLCanvasElement, quality = 0.92)
   return canvas.toDataURL("image/jpeg", quality);
 }
 
+export async function canvasToJpegBlob(canvas: HTMLCanvasElement, quality = 0.92) {
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (next) => {
+        if (next) resolve(next);
+        else reject(new Error("이미지를 만들지 못했습니다."));
+      },
+      "image/jpeg",
+      quality
+    );
+  });
+  return blob;
+}
+
 async function blobToCanvas(blob: Blob) {
   if (typeof createImageBitmap === "function") {
     try {
@@ -164,8 +178,18 @@ export async function uprightImageSrc(src: string) {
   return canvasToJpegUrl(canvas, 0.92);
 }
 
+export async function detectImageRotation(src: string): Promise<Rotation> {
+  return detectPassportRotation(await inputToCanvas(src));
+}
+
 export async function rotateImageSrc(src: string, deg: Rotation) {
   if (!deg) return src;
   return canvasToJpegUrl(rotateCanvas(await inputToCanvas(src), deg), 0.92);
+}
+
+/** 원본을 고화질 JPEG로 구워 저장할 때 씁니다. */
+export async function bakeRotatedImage(src: string, deg: Rotation, quality = 0.92) {
+  const canvas = deg ? rotateCanvas(await inputToCanvas(src), deg) : await inputToCanvas(src);
+  return canvasToJpegBlob(canvas, quality);
 }
 
