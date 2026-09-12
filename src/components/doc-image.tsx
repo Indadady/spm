@@ -61,7 +61,7 @@ export function DocImage({
   const drag = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const pinch = useRef<{ dist: number; zoom: number } | null>(null);
   const saveAs = (fileName || `${label}.jpg`).replace(/[\\/:*?"<>|]+/g, "_");
-  const viewSrc = shown || src;
+  const viewSrc = shown || src || "";
 
   useEffect(() => {
     setFailed(false);
