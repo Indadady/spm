@@ -14,7 +14,7 @@ import {
 import { getDownloadURL, ref, uploadBytes, uploadString } from "firebase/storage";
 import { randomKakaoOgSlot } from "./company";
 import { ensureAnonAuth, getFirebase, SURVEY_APP_ID } from "./firebase";
-import { dataUrlBytes, fileForDownload, shrinkDataUrl } from "./image-file";
+import { dataUrlBytes, fileForDownload, fileForStorageFallback, shrinkDataUrl } from "./image-file";
 import { buildRosterXlsx, type RosterSheet } from "./roster-xlsx";
 
 export type CollectKind = "insurance" | "passport" | "both";
@@ -381,11 +381,17 @@ export async function submitGroupEntry(campaign: GroupCampaign, entry: GroupEntr
       const stored = await fileForDownload(originalFile);
       passportImageUrl = (await uploadPassportFile(campaign.id, stored)) ?? "";
     } catch {
-      passportImageUrl = "";
+      try {
+        const fallback = await fileForStorageFallback(originalFile);
+        passportImageUrl = (await uploadPassportFile(campaign.id, fallback)) ?? "";
+      } catch {
+        passportImageUrl = "";
+      }
     }
   }
   if (!passportImageUrl && preview) {
     try {
+      // 최후 수단: 미리보기라도 Storage에 두되, 추가 열화는 막습니다.
       passportImageUrl = (await uploadDataUrl(campaign.id, preview, entry.passportFileName ?? "passport.jpg")) ?? "";
     } catch {
       passportImageUrl = "";

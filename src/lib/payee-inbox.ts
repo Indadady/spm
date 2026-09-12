@@ -1,6 +1,6 @@
 import { addDoc, deleteDoc, getDocs, onSnapshot, query, type Unsubscribe } from "firebase/firestore";
 import { getDownloadURL, listAll, ref, uploadBytes, uploadString } from "firebase/storage";
-import { dataUrlBytes, fileForDownload, shrinkDataUrl } from "./image-file";
+import { dataUrlBytes, fileForDownload, fileForStorageFallback, shrinkDataUrl } from "./image-file";
 import { ensureAnonAuth, getFirebase, payeeResponsesCol, SURVEY_APP_ID } from "./firebase";
 import type { PayeeProfile, Payout } from "./types";
 
@@ -67,7 +67,12 @@ async function uploadDataUrl(payoutId: string, dataUrl: string, fileName: string
 async function uploadOriginalFile(payoutId: string, file: File, kind: "id" | "passport") {
   const { storage } = getFirebase();
   if (!storage) return undefined;
-  const stored = await fileForDownload(file);
+  let stored: File;
+  try {
+    stored = await fileForDownload(file);
+  } catch {
+    stored = await fileForStorageFallback(file);
+  }
   const ext = (stored.name.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "").slice(0, 5) || "jpg";
   const path = `artifacts/${SURVEY_APP_ID}/public/spm/${payoutId}/${Date.now()}-${kind}.${ext}`;
   const fileRef = ref(storage, path);

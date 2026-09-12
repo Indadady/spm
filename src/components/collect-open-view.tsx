@@ -31,13 +31,12 @@ import {
   sortEntriesByOrder,
   type GroupEntry,
 } from "@/lib/group-collect";
-import { absoluteUrl } from "@/lib/paths";
+import { absoluteUrl, withBase } from "@/lib/paths";
 import { useGroupCampaign } from "@/lib/use-group-campaign";
 import { useGroupInbox } from "@/lib/use-group-inbox";
 import { useGroupStore } from "@/lib/group-store";
 import { mergePassportScan, scanPassportImage } from "@/lib/passport-scan";
 import { GripVertical } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -236,9 +235,9 @@ export function CollectOpenView({
     <GroupPinGate campaign={campaign} canSetPin={!office}>
       <div className={cn("space-y-5", office && "mx-auto max-w-3xl px-4 py-6")}>
         {office ? null : (
-          <Link href="/collect" className="text-sm text-muted-foreground">
+          <a href={withBase("/collect/")} className="text-sm text-muted-foreground">
             ← 여행자 자료
-          </Link>
+          </a>
         )}
         <div>
           <p className="text-xs font-semibold tracking-wide text-[color:var(--gold-ink)]">
