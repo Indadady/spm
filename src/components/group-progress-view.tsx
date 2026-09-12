@@ -1,6 +1,6 @@
 "use client";
 
-import { GroupStatusBoard } from "@/components/group-status-board";
+import { GroupStatusBoard, statusBoardMaxWidthClass } from "@/components/group-status-board";
 import { PublicSiteLink } from "@/components/public-site-link";
 import { useGroupCampaign } from "@/lib/use-group-campaign";
 import { useGroupInbox } from "@/lib/use-group-inbox";
@@ -23,7 +23,7 @@ export function GroupProgressView({ id }: { id: string }) {
   }
 
   return (
-    <article className="mx-auto max-w-md px-4 py-6">
+    <article className={`mx-auto px-4 py-6 ${statusBoardMaxWidthClass(inbox.rows.length)}`}>
       <GroupStatusBoard campaign={campaign} rows={inbox.rows} />
       <div className="mt-4">
         <PublicSiteLink />

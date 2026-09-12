@@ -11,7 +11,7 @@ import { useStore } from "@/lib/store";
 import type { Payout } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ImagePlus } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 function PhotoPick({
   id,
@@ -26,7 +26,8 @@ function PhotoPick({
   hint: string;
   value: string;
   fileName: string;
-  onChange: (dataUrl: string, fileName: string) => void;
+  /** preview는 화면용 축소본, original은 Storage 업로드용 원본 */
+  onChange: (preview: string, fileName: string, original: File) => void;
 }) {
   const [error, setError] = useState("");
   return (
@@ -48,7 +49,7 @@ function PhotoPick({
             const file = e.target.files?.[0];
             if (!file) return;
             try {
-              onChange(await fileToJpeg(file), file.name);
+              onChange(await fileToJpeg(file), file.name, file);
               setError("");
             } catch {
               setError("사진을 다시 선택해 주세요.");
@@ -109,6 +110,8 @@ export function PayeeForm({ payout }: { payout: Payout }) {
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
   const [sending, setSending] = useState(false);
+  const idFile = useRef<File | null>(null);
+  const passportFile = useRef<File | null>(null);
 
   if (done) {
     return (
@@ -150,8 +153,11 @@ export function PayeeForm({ payout }: { payout: Payout }) {
         savePayee(payout.id, profile);
         try {
           await Promise.race([
-            submitPayee(payout, profile),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 25_000)),
+            submitPayee(payout, profile, {
+              idFile: idFile.current ?? undefined,
+              passportFile: wantPass ? passportFile.current ?? undefined : undefined,
+            }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 90_000)),
           ]);
         } catch {
           /* 이 기기에는 이미 저장됨. 자료함 연결이 느려도 제출은 끝냅니다. */
@@ -193,7 +199,8 @@ export function PayeeForm({ payout }: { payout: Payout }) {
         hint="주민등록증 또는 운전면허증 사진을 올려 주세요"
         value={idImage}
         fileName={idFileName}
-        onChange={(dataUrl, file) => {
+        onChange={(dataUrl, file, original) => {
+          idFile.current = original;
           setIdImage(dataUrl);
           setIdFileName(file);
         }}
@@ -206,7 +213,8 @@ export function PayeeForm({ payout }: { payout: Payout }) {
             hint="여권 정보면이 잘 보이게 찍어 주세요"
             value={passportImage}
             fileName={passportFileName}
-            onChange={(dataUrl, file) => {
+            onChange={(dataUrl, file, original) => {
+              passportFile.current = original;
               setPassportImage(dataUrl);
               setPassportFileName(file);
             }}

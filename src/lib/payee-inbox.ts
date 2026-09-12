@@ -1,6 +1,6 @@
 import { addDoc, deleteDoc, getDocs, onSnapshot, query, type Unsubscribe } from "firebase/firestore";
-import { getDownloadURL, listAll, ref, uploadString } from "firebase/storage";
-import { dataUrlBytes, shrinkDataUrl } from "./image-file";
+import { getDownloadURL, listAll, ref, uploadBytes, uploadString } from "firebase/storage";
+import { dataUrlBytes, fileForDownload, shrinkDataUrl } from "./image-file";
 import { ensureAnonAuth, getFirebase, payeeResponsesCol, SURVEY_APP_ID } from "./firebase";
 import type { PayeeProfile, Payout } from "./types";
 
@@ -58,6 +58,25 @@ async function uploadDataUrl(payoutId: string, dataUrl: string, fileName: string
       customMetadata: { originalName: fileName },
     }),
     20_000,
+    "upload"
+  );
+  return withTimeout(getDownloadURL(fileRef), 8_000, "url");
+}
+
+/** 고객이 고른 원본(또는 거의 원본)을 Storage에 올립니다. 미리보기용 JPEG 압축본을 올리지 않습니다. */
+async function uploadOriginalFile(payoutId: string, file: File, kind: "id" | "passport") {
+  const { storage } = getFirebase();
+  if (!storage) return undefined;
+  const stored = await fileForDownload(file);
+  const ext = (stored.name.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "").slice(0, 5) || "jpg";
+  const path = `artifacts/${SURVEY_APP_ID}/public/spm/${payoutId}/${Date.now()}-${kind}.${ext}`;
+  const fileRef = ref(storage, path);
+  await withTimeout(
+    uploadBytes(fileRef, stored, {
+      contentType: stored.type || "image/jpeg",
+      customMetadata: { originalName: file.name },
+    }),
+    60_000,
     "upload"
   );
   return withTimeout(getDownloadURL(fileRef), 8_000, "url");
@@ -132,7 +151,11 @@ async function fillMissingImages(payoutId: string, rows: PayeeProfile[]) {
   }
 }
 
-export async function submitPayee(payout: Payout, profile: PayeeProfile) {
+export async function submitPayee(
+  payout: Payout,
+  profile: PayeeProfile,
+  originals?: { idFile?: File; passportFile?: File }
+) {
   await withTimeout(ensureAnonAuth(), 8_000, "auth");
   const idEmbed = await compactImage(profile.idImageDataUrl);
   const passportEmbed = await compactImage(profile.passportImageDataUrl);
@@ -140,7 +163,14 @@ export async function submitPayee(payout: Payout, profile: PayeeProfile) {
   let passportImageUrl = profile.passportImageUrl ?? "";
   let signatureDataUrl = profile.signatureDataUrl ?? "";
 
-  if (profile.idImageDataUrl) {
+  if (originals?.idFile) {
+    try {
+      idImageUrl = (await uploadOriginalFile(payout.id, originals.idFile, "id")) ?? "";
+    } catch {
+      idImageUrl = "";
+    }
+  }
+  if (!idImageUrl && profile.idImageDataUrl) {
     try {
       idImageUrl =
         (await uploadDataUrl(payout.id, profile.idImageDataUrl, profile.idFileName ?? "id.jpg")) ?? "";
@@ -149,7 +179,15 @@ export async function submitPayee(payout: Payout, profile: PayeeProfile) {
     }
   }
 
-  if (profile.passportImageDataUrl) {
+  if (originals?.passportFile) {
+    try {
+      passportImageUrl =
+        (await uploadOriginalFile(payout.id, originals.passportFile, "passport")) ?? "";
+    } catch {
+      passportImageUrl = "";
+    }
+  }
+  if (!passportImageUrl && profile.passportImageDataUrl) {
     try {
       passportImageUrl =
         (await uploadDataUrl(

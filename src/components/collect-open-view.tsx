@@ -3,7 +3,7 @@
 import { CopyTextButton } from "@/components/copy-text-button";
 import { DocImage } from "@/components/doc-image";
 import { GroupPinGate } from "@/components/group-pin-gate";
-import { GroupStatusBoard } from "@/components/group-status-board";
+import { GroupStatusBoard, statusBoardMaxWidthClass } from "@/components/group-status-board";
 import { Button } from "@/components/ui/button";
 import {
   collectKindLabel,
@@ -625,7 +625,7 @@ export function CollectOpenView({
               onClick={() => setStatusOpen(false)}
             >
               <div
-                className="my-4 w-full max-w-md"
+                className={`my-4 w-full ${statusBoardMaxWidthClass(rows.length)}`}
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-white/95 px-3 py-2 shadow">

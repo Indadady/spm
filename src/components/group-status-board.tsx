@@ -8,6 +8,7 @@ import {
   type GroupCampaign,
   type GroupEntry,
 } from "@/lib/group-collect";
+import { cn } from "@/lib/utils";
 
 function rowMeta(campaign: GroupCampaign, row: GroupEntry) {
   const bits: string[] = [];
@@ -16,6 +17,20 @@ function rowMeta(campaign: GroupCampaign, row: GroupEntry) {
     bits.push(row.passportImageUrl || row.passportImageDataUrl ? "여권" : "여권 없음");
   }
   return bits.join(" · ");
+}
+
+/** 캡처용: 10명 이하는 1열, 11~20은 2열, 21명부터 3열 */
+export function statusBoardColumns(count: number) {
+  if (count > 20) return 3;
+  if (count > 10) return 2;
+  return 1;
+}
+
+export function statusBoardMaxWidthClass(count: number) {
+  const cols = statusBoardColumns(count);
+  if (cols >= 3) return "max-w-4xl";
+  if (cols === 2) return "max-w-2xl";
+  return "max-w-md";
 }
 
 /** 담당자에게 캡처해 보낼 제출 현황판 */
@@ -29,6 +44,7 @@ export function GroupStatusBoard({
   const expected = campaign.expectedCount;
   const count = rows.length;
   const remain = expected && expected > count ? expected - count : 0;
+  const cols = statusBoardColumns(count);
 
   return (
     <div className="rounded-2xl border bg-white px-4 py-5 text-[color:var(--navy)] shadow-sm">
@@ -53,20 +69,34 @@ export function GroupStatusBoard({
       {rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">아직 제출이 없습니다.</p>
       ) : (
-        <ol className="space-y-1.5">
+        <ol
+          className={cn(
+            "grid gap-1.5",
+            cols === 1 && "grid-cols-1",
+            cols === 2 && "grid-cols-2",
+            cols >= 3 && "grid-cols-2 sm:grid-cols-3"
+          )}
+        >
           {rows.map((row, i) => (
             <li
               key={row.remoteId ?? `${row.name}-${i}`}
-              className="flex items-center gap-3 rounded-xl border border-[#efe9df] bg-[#fbfaf7] px-3 py-2.5"
+              className={cn(
+                "flex items-center gap-2 rounded-xl border border-[#efe9df] bg-[#fbfaf7]",
+                cols === 1 ? "gap-3 px-3 py-2.5" : "px-2.5 py-2"
+              )}
             >
-              <span className="w-6 shrink-0 text-center text-xs font-semibold tabular-nums text-muted-foreground">
+              <span className="w-5 shrink-0 text-center text-xs font-semibold tabular-nums text-muted-foreground sm:w-6">
                 {i + 1}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold">{row.name}</p>
-                <p className="truncate text-[11px] text-muted-foreground">{rowMeta(campaign, row) || "제출"}</p>
+                <p className="truncate text-sm font-semibold">{row.name}</p>
+                <p className="truncate text-[10px] text-muted-foreground sm:text-[11px]">
+                  {rowMeta(campaign, row) || "제출"}
+                </p>
               </div>
-              <span className="shrink-0 text-[11px] font-semibold text-[color:var(--gold-ink)]">제출</span>
+              <span className="shrink-0 text-[10px] font-semibold text-[color:var(--gold-ink)] sm:text-[11px]">
+                제출
+              </span>
             </li>
           ))}
         </ol>
