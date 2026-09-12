@@ -493,7 +493,7 @@ export async function replaceGroupPassportImage(
       contentType: blob.type || "image/jpeg",
       customMetadata: { originalName: fileName },
     }),
-    60_000,
+    90_000,
     "upload"
   );
   const passportImageUrl = await withTimeout(getDownloadURL(fileRef), 8_000, "url");
@@ -516,10 +516,18 @@ export async function replaceGroupPassportImage(
   } catch {
     passportImageDataUrl = "";
   }
-  await patchGroupEntry(campaignId, entryId, {
-    passportImageUrl,
-    passportImageDataUrl,
-  });
+  try {
+    await patchGroupEntry(campaignId, entryId, {
+      passportImageUrl,
+      passportImageDataUrl,
+    });
+  } catch {
+    // 미리보기가 크면 URL만 남겨도 다음에 원본으로 보입니다.
+    await patchGroupEntry(campaignId, entryId, {
+      passportImageUrl,
+      passportImageDataUrl: "",
+    });
+  }
   return { passportImageUrl, passportImageDataUrl };
 }
 

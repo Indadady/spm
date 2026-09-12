@@ -68,13 +68,22 @@ export function DocImage({
   const drag = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const pinch = useRef<{ dist: number; zoom: number } | null>(null);
   const persistSeq = useRef(0);
+  const localBlob = useRef<string>("");
   const saveAs = (fileName || `${label}.jpg`).replace(/[\\/:*?"<>|]+/g, "_");
+
+  function revokeLocal() {
+    if (localBlob.current) {
+      URL.revokeObjectURL(localBlob.current);
+      localBlob.current = "";
+    }
+  }
 
   useEffect(() => {
     setFailed(false);
     setTurn(0);
     setNatural({ w: 0, h: 0 });
     setPersistMsg("");
+    revokeLocal();
     if (!src) {
       setViewSrc("");
       return;
@@ -85,8 +94,8 @@ export function DocImage({
     void detectImageRotation(src)
       .then((deg) => {
         if (gone || !deg) return;
-        setTurn(deg);
-        if (onPersist) void persistRotation(src, deg);
+        // CSS로 돌리지 않고 바로 구워 보여 카드 밖으로 안 튀게 함
+        void applyRotation(src, deg);
       })
       .catch(() => {
         /* keep as-is */
@@ -94,9 +103,13 @@ export function DocImage({
     return () => {
       gone = true;
     };
-    // onPersist는 매 렌더 새 함수일 수 있어 src/upright만 본다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src, upright]);
+
+  useEffect(() => {
+    return () => revokeLocal();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!open) {
@@ -130,27 +143,45 @@ export function DocImage({
     };
   }, [open]);
 
-  async function persistRotation(source: string, deg: Rotation) {
-    if (!onPersist || !deg) return;
+  async function applyRotation(source: string, deg: Rotation) {
+    if (!deg) return;
     const seq = ++persistSeq.current;
     setPersisting(true);
-    setPersistMsg("저장 중…");
+    setPersistMsg("방향 맞추는 중…");
     try {
-      const blob = await bakeRotatedImage(source, deg, 0.92);
+      const blob = await bakeRotatedImage(source, deg, 0.9, 2800);
       if (seq !== persistSeq.current) return;
-      const nextUrl = await onPersist(blob);
-      if (seq !== persistSeq.current) return;
-      if (nextUrl) {
-        setViewSrc(nextUrl);
-        setTurn(0);
-        setNatural({ w: 0, h: 0 });
-      } else {
-        setTurn(0);
+      const localUrl = URL.createObjectURL(blob);
+      revokeLocal();
+      localBlob.current = localUrl;
+      // 먼저 화면에 바른 방향으로 넣어 레이아웃이 안 깨지게
+      setViewSrc(localUrl);
+      setTurn(0);
+      setNatural({ w: 0, h: 0 });
+
+      if (!onPersist) {
+        setPersistMsg("");
+        return;
       }
-      setPersistMsg("저장됨");
-      window.setTimeout(() => setPersistMsg(""), 1_600);
+      setPersistMsg("저장 중…");
+      try {
+        const nextUrl = await onPersist(blob);
+        if (seq !== persistSeq.current) return;
+        if (nextUrl) {
+          setViewSrc(nextUrl);
+          revokeLocal();
+        }
+        setPersistMsg("저장됨");
+        window.setTimeout(() => {
+          if (seq === persistSeq.current) setPersistMsg("");
+        }, 1_600);
+      } catch {
+        // 화면은 맞춰 둔 상태 유지
+        setPersistMsg("화면은 맞춤 · 저장만 실패");
+      }
     } catch {
-      setPersistMsg("저장 실패 · 다시 회전해 주세요");
+      setTurn(deg);
+      setPersistMsg("방향 맞추기 실패");
     } finally {
       if (seq === persistSeq.current) setPersisting(false);
     }
@@ -159,12 +190,12 @@ export function DocImage({
   async function rotateBy(deg: 90 | 180 | 270) {
     if (!viewSrc || persisting) return;
     const next = nextTurn(turn, deg);
-    setTurn(next);
-    if (onPersist && next) {
-      await persistRotation(viewSrc, next);
-    } else if (onPersist && !next) {
-      setPersistMsg("");
+    if (!next) {
+      setTurn(0);
+      return;
     }
+    // turn이 이미 0인 정상 표시 상태에서 90도씩 구워 저장
+    await applyRotation(viewSrc, next);
   }
 
   function bumpZoom(delta: number) {
@@ -202,7 +233,7 @@ export function DocImage({
   const thumbStyle = turn ? { transform: `rotate(${turn}deg)` } : undefined;
 
   return (
-    <div>
+    <div className="min-w-0">
       <div className="mb-1 flex items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
           {label}
@@ -271,20 +302,22 @@ export function DocImage({
           </p>
         )
       ) : (
-        <button type="button" className="block w-full text-left" onClick={() => setOpen(true)}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={viewSrc}
-            alt={label}
-            referrerPolicy="no-referrer"
-            onError={() => setFailed(true)}
-            onLoad={(e) => {
-              const el = e.currentTarget;
-              setNatural({ w: el.naturalWidth || 0, h: el.naturalHeight || 0 });
-            }}
-            style={thumbStyle}
-            className="max-h-80 w-full cursor-zoom-in rounded-xl border bg-white object-contain"
-          />
+        <button type="button" className="block w-full min-w-0 text-left" onClick={() => setOpen(true)}>
+          <div className="max-h-80 overflow-hidden rounded-xl border bg-white">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={viewSrc}
+              alt={label}
+              referrerPolicy="no-referrer"
+              onError={() => setFailed(true)}
+              onLoad={(e) => {
+                const el = e.currentTarget;
+                setNatural({ w: el.naturalWidth || 0, h: el.naturalHeight || 0 });
+              }}
+              style={thumbStyle}
+              className="mx-auto max-h-80 max-w-full cursor-zoom-in object-contain"
+            />
+          </div>
           <p className="mt-1 text-center text-[11px] text-muted-foreground">
             눌러서 원본 화질로 확대 · 회전은 자동 저장
           </p>

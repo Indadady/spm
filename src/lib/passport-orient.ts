@@ -187,9 +187,27 @@ export async function rotateImageSrc(src: string, deg: Rotation) {
   return canvasToJpegUrl(rotateCanvas(await inputToCanvas(src), deg), 0.92);
 }
 
-/** 원본을 고화질 JPEG로 구워 저장할 때 씁니다. */
-export async function bakeRotatedImage(src: string, deg: Rotation, quality = 0.92) {
-  const canvas = deg ? rotateCanvas(await inputToCanvas(src), deg) : await inputToCanvas(src);
+export async function bakeRotatedImage(
+  src: string,
+  deg: Rotation,
+  quality = 0.92,
+  maxEdge = 2800
+) {
+  let canvas = deg ? rotateCanvas(await inputToCanvas(src), deg) : await inputToCanvas(src);
+  const edge = Math.max(canvas.width, canvas.height);
+  if (edge > maxEdge) {
+    const scale = maxEdge / edge;
+    const next = document.createElement("canvas");
+    next.width = Math.max(1, Math.round(canvas.width * scale));
+    next.height = Math.max(1, Math.round(canvas.height * scale));
+    const ctx = next.getContext("2d");
+    if (ctx) {
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(canvas, 0, 0, next.width, next.height);
+      canvas = next;
+    }
+  }
   return canvasToJpegBlob(canvas, quality);
 }
 

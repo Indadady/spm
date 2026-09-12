@@ -359,7 +359,7 @@ export function CollectOpenView({
                   <li
                     key={key}
                     className={cn(
-                      "rounded-2xl border bg-card px-3 py-3 transition-shadow sm:px-4",
+                      "overflow-hidden rounded-2xl border bg-card px-3 py-3 transition-shadow sm:px-4",
                       dragging && "opacity-60 ring-2 ring-[color:var(--navy)]/30",
                       over && "border-[color:var(--navy)] shadow-md"
                     )}
