@@ -155,15 +155,24 @@ async function blobToCanvas(blob: Blob) {
   }
 }
 
+async function fetchBlob(url: string, ms = 20_000) {
+  const ctrl = new AbortController();
+  const timer = window.setTimeout(() => ctrl.abort(), ms);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal, mode: "cors" });
+    if (!res.ok) throw new Error("이미지를 읽지 못했습니다.");
+    return res.blob();
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
 async function inputToCanvas(input: File | string) {
   if (typeof input !== "string") return blobToCanvas(input);
   if (input.startsWith("data:") || input.startsWith("blob:")) {
-    const res = await fetch(input);
-    return blobToCanvas(await res.blob());
+    return blobToCanvas(await fetchBlob(input, 15_000));
   }
-  const res = await fetch(input);
-  if (!res.ok) throw new Error("이미지를 읽지 못했습니다.");
-  return blobToCanvas(await res.blob());
+  return blobToCanvas(await fetchBlob(input, 25_000));
 }
 
 export async function uprightPassportFile(file: File) {

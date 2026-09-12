@@ -129,6 +129,8 @@ export function looksLikePassportName(name?: string) {
   if (/[CL]{4,}/.test(n)) return false;
   const parts = n.split(" ");
   if (parts.some((p) => p.length > 14)) return false;
+  if (parts.length >= 3 && parts.every((p) => p.length <= 2)) return false;
+  if (!parts.some((p) => p.length >= 3)) return false;
   if (parts.length >= 2 && parts.every((p) => /^[A-Z]{2,14}$/.test(p))) return true;
   return /^[A-Z]{2,12} [A-Z]{2,14}$/.test(n);
 }

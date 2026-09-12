@@ -247,6 +247,9 @@ function nameLooksGood(name: string) {
   if (/(.)\1{2,}/.test(n.replace(/\s/g, ""))) return false;
   const parts = n.split(" ");
   if (parts.some((p) => p.length > 14)) return false;
+  // AN TE ET JR 처럼 짧은 조각만 이어진 잡음
+  if (parts.length >= 3 && parts.every((p) => p.length <= 2)) return false;
+  if (!parts.some((p) => p.length >= 3)) return false;
   if (parts.some((p) => p.length === 1 && p !== "A")) return parts.length >= 2 && n.length >= 6;
   return /[A-Z]{2,}/.test(n);
 }
@@ -254,14 +257,16 @@ function nameLooksGood(name: string) {
 function nameScore(name: string) {
   const n = sanitizePassportName(name);
   if (!n) return 0;
+  if (!nameLooksGood(n) && n.split(" ").every((p) => p.length <= 2)) return 0;
   let score = Math.min(n.length, 18);
   const parts = n.split(" ");
   if (parts.length >= 2) score += 8;
   if (SURNAMES.has(parts[0] ?? "")) score += 10;
+  if (parts.some((p) => SURNAMES.has(p))) score += 6;
   if (/[0-9]/.test(name)) score -= 6;
   if (/(.)\1{2,}/.test(n.replace(/\s/g, ""))) score -= 20;
   if (parts.some((p) => p.length > 12)) score -= 10;
-  // 짧은·깔끔한 이름이 필러 붙은 긴 이름보다 유리하게
+  if (parts.length >= 3 && parts.every((p) => p.length <= 2)) score -= 25;
   score += Math.max(0, 12 - Math.abs(n.length - 10));
   if (NAME_NOISE.has(n)) return 0;
   return score;
@@ -270,18 +275,27 @@ function nameScore(name: string) {
 function betterName(a: string, b: string) {
   const left = sanitizePassportName(a);
   const right = sanitizePassportName(b);
-  return nameScore(right) > nameScore(left) ? right : left;
+  const ls = nameScore(left);
+  const rs = nameScore(right);
+  if (rs > ls) return right;
+  if (ls > rs) return left;
+  // 동점이면 성씨가 있는 쪽
+  if (SURNAMES.has(right.split(" ")[0] ?? "") && !SURNAMES.has(left.split(" ")[0] ?? "")) return right;
+  return left;
 }
 
 function betterNo(a: string, b: string) {
-  const na = a.replace(/[^A-Z0-9]/g, "");
-  const nb = b.replace(/[^A-Z0-9]/g, "");
+  const na = a.replace(/[^A-Z0-9]/gi, "").toUpperCase();
+  const nb = b.replace(/[^A-Z0-9]/gi, "").toUpperCase();
   const score = (n: string) => {
     if (!n) return 0;
-    if (/^[A-Z]{2}\d{7}$/.test(n)) return 4;
-    if (/^[A-Z]\d{8}$/.test(n)) return 3;
-    if (/^[A-Z][A-Z0-9]{7,8}$/.test(n)) return 2;
-    return 1;
+    // 숫자 없는 영문만(PEAFFSSSR)은 여권번호로 보지 않음
+    if (!/\d/.test(n)) return 0;
+    if (/^[A-Z]{2}\d{7}$/.test(n)) return 5;
+    if (/^[A-Z]\d{8}$/.test(n)) return 4;
+    if (/^[A-Z][A-Z0-9]{7,8}$/.test(n) && /\d/.test(n)) return 2;
+    if (n.length >= 8 && /\d/.test(n)) return 1;
+    return 0;
   };
   return score(nb) > score(na) ? nb : na;
 }

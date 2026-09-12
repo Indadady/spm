@@ -5,7 +5,7 @@ import {
   scorePassportScan,
   type PassportScan,
 } from "./passport-mrz";
-import { uprightPassportCanvas } from "./passport-orient";
+import { detectPassportRotation } from "./passport-orient";
 
 export type { PassportScan };
 export {
@@ -367,50 +367,59 @@ function isStrong(scan: PassportScan | null) {
   return scorePassportScan(scan) >= READY_SCORE && passportScanReady(scan);
 }
 
+async function scanOrientedImage(img: HTMLCanvasElement): Promise<PassportScan | null> {
+  const band = mrzBand(img);
+  const lineH = Math.max(0.07, band.height * 0.48);
+  const line1Top = band.top;
+  const line2Top = Math.min(0.92, band.top + band.height * 0.48);
+
+  const tries: TryOpt[] = [
+    { top: line2Top, height: lineH + 0.02, max: 2800, contrast: 1.4, binary: true, psm: "7", doSharpen: true },
+    { top: line2Top, height: lineH + 0.02, max: 2600, contrast: 1.55, binary: true, psm: "7", threshBias: -12 },
+    { top: line2Top, height: lineH + 0.02, max: 2600, contrast: 1.45, binary: true, psm: "7", threshBias: 12 },
+    { top: line2Top, height: lineH + 0.03, max: 2400, contrast: 1.5, psm: "7", doSharpen: true },
+    { top: line2Top, height: lineH + 0.02, max: 2600, contrast: 1.4, binary: true, invert: true, psm: "7" },
+    { top: line1Top, height: lineH + 0.02, max: 2800, contrast: 1.35, binary: true, psm: "7", doSharpen: true },
+    { top: line1Top, height: lineH + 0.02, max: 2400, contrast: 1.5, binary: true, psm: "7" },
+    { ...band, max: 2600, contrast: 1.4, binary: true, psm: "6", doSharpen: true },
+    { ...band, max: 2400, contrast: 1.55, binary: true, psm: "6" },
+    { top: 0.58, height: 0.4, max: 2400, contrast: 1.4, binary: true, psm: "6" },
+    { top: 0.12, height: 0.5, max: 1800, contrast: 1.25, psm: "6", names: true, insetX: 0.08 },
+    { top: 0.18, height: 0.45, max: 1700, contrast: 1.3, binary: true, psm: "6", names: true, insetX: 0.1 },
+  ];
+
+  let best: PassportScan | null = null;
+  for (const tryOn of tries) {
+    const region = copyRegion(img, tryOn);
+    const canvas = rotateCanvas(region, tryOn.rotate ?? 0);
+    const text = await readCanvas(canvas, tryOn.psm, tryOn.names ? NAME_CHARS : MRZ_CHARS);
+    best = mergePassportScan(best, parsePassportText(text));
+    if (isStrong(best)) return best;
+  }
+  return best;
+}
+
 export async function scanPassportImage(input: File | string): Promise<PassportScan | null> {
   try {
     const blob = await blobFromInput(input);
     const raw = await canvasFromBlob(blob);
-    const img = uprightPassportCanvas(raw).canvas;
-    const band = mrzBand(img);
-    // 두 줄로 나눠 읽으면 번호·생년·성별·만료 정확도가 올라갑니다.
-    const lineH = Math.max(0.07, band.height * 0.48);
-    const line1Top = band.top;
-    const line2Top = Math.min(0.92, band.top + band.height * 0.48);
-
-    const tries: TryOpt[] = [
-      // 2행(번호·생년·성별·만료) 우선 — 체크디지트로 검증 가능
-      { top: line2Top, height: lineH + 0.02, max: 2800, contrast: 1.4, binary: true, psm: "7", doSharpen: true },
-      { top: line2Top, height: lineH + 0.02, max: 2600, contrast: 1.55, binary: true, psm: "7", threshBias: -12 },
-      { top: line2Top, height: lineH + 0.02, max: 2600, contrast: 1.45, binary: true, psm: "7", threshBias: 12 },
-      { top: line2Top, height: lineH + 0.03, max: 2400, contrast: 1.5, psm: "7", doSharpen: true },
-      { top: line2Top, height: lineH + 0.02, max: 2600, contrast: 1.4, binary: true, invert: true, psm: "7" },
-      { top: line2Top, height: lineH + 0.02, max: 2600, contrast: 1.4, binary: true, psm: "7", rotate: -2 },
-      { top: line2Top, height: lineH + 0.02, max: 2600, contrast: 1.4, binary: true, psm: "7", rotate: 2 },
-      // 1행(영문명)
-      { top: line1Top, height: lineH + 0.02, max: 2800, contrast: 1.35, binary: true, psm: "7", doSharpen: true },
-      { top: line1Top, height: lineH + 0.02, max: 2400, contrast: 1.5, binary: true, psm: "7" },
-      { top: line1Top, height: lineH + 0.03, max: 2400, contrast: 1.4, psm: "7" },
-      // 밴드 전체
-      { ...band, max: 2600, contrast: 1.4, binary: true, psm: "6", doSharpen: true },
-      { ...band, max: 2400, contrast: 1.55, binary: true, psm: "6" },
-      { ...band, max: 2200, contrast: 1.45, psm: "6" },
-      { top: 0.58, height: 0.4, max: 2400, contrast: 1.4, binary: true, psm: "6" },
-      { top: 0.55, height: 0.44, max: 2200, contrast: 1.35, binary: true, invert: true, psm: "6" },
-      // 시각 영문명(MRZ 위)
-      { top: 0.12, height: 0.5, max: 1800, contrast: 1.25, psm: "6", names: true, insetX: 0.08 },
-      { top: 0.2, height: 0.4, max: 1600, contrast: 1.3, binary: true, psm: "6", names: true, insetX: 0.1 },
-      { top: 0, height: 1, max: 1600, contrast: 1.15, psm: "6" },
-    ];
+    // 고객이 가로·세로로 찍은 사진을 모두 시도 — 방향 탐지만으로는 부족한 경우가 많음
+    const detected = detectPassportRotation(raw);
+    const degs: Array<0 | 90 | 180 | 270> = [detected, 0, 90, 180, 270].filter(
+      (d, i, arr) => arr.indexOf(d) === i
+    ) as Array<0 | 90 | 180 | 270>;
 
     let best: PassportScan | null = null;
-    for (const tryOn of tries) {
-      const region = copyRegion(img, tryOn);
-      const canvas = rotateCanvas(region, tryOn.rotate ?? 0);
-      const text = await readCanvas(canvas, tryOn.psm, tryOn.names ? NAME_CHARS : MRZ_CHARS);
-      const hit = parsePassportText(text);
-      best = mergePassportScan(best, hit);
-      if (isStrong(best)) return best;
+    let bestScore = 0;
+    for (const deg of degs) {
+      const img = deg ? rotateCanvas(raw, deg) : raw;
+      const hit = await scanOrientedImage(img);
+      const score = scorePassportScan(hit);
+      if (score > bestScore) {
+        best = hit;
+        bestScore = score;
+      }
+      if (isStrong(hit)) return hit;
     }
     return best;
   } catch {

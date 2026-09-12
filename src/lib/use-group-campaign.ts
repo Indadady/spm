@@ -40,7 +40,11 @@ export function useGroupCampaign(id: string) {
   }, [id]);
 
   const campaign = remote
-    ? { ...remote, departPin: remote.departPin || local?.departPin }
+    ? {
+        ...remote,
+        departPin: remote.departPin || local?.departPin,
+        entryOrder: remote.entryOrder?.length ? remote.entryOrder : local?.entryOrder,
+      }
     : local;
   const waiting = !ready || (!fetched && !campaign);
   return { campaign, waiting, missing: fetched && !campaign };

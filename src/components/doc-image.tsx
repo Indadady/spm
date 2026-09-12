@@ -94,8 +94,8 @@ export function DocImage({
     void detectImageRotation(src)
       .then((deg) => {
         if (gone || !deg) return;
-        // CSS로 돌리지 않고 바로 구워 보여 카드 밖으로 안 튀게 함
-        void applyRotation(src, deg);
+        // 자동 보정은 CSS로만 먼저 맞춤(저장 중 멈춤 방지). 확정 저장은 「회전」클릭 시.
+        setTurn(deg);
       })
       .catch(() => {
         /* keep as-is */
@@ -148,13 +148,18 @@ export function DocImage({
     const seq = ++persistSeq.current;
     setPersisting(true);
     setPersistMsg("방향 맞추는 중…");
+    const bakeTimer = window.setTimeout(() => {
+      if (seq === persistSeq.current) {
+        setPersisting(false);
+        setPersistMsg("시간 초과 · 다시 눌러 주세요");
+      }
+    }, 35_000);
     try {
       const blob = await bakeRotatedImage(source, deg, 0.9, 2800);
       if (seq !== persistSeq.current) return;
       const localUrl = URL.createObjectURL(blob);
       revokeLocal();
       localBlob.current = localUrl;
-      // 먼저 화면에 바른 방향으로 넣어 레이아웃이 안 깨지게
       setViewSrc(localUrl);
       setTurn(0);
       setNatural({ w: 0, h: 0 });
@@ -176,13 +181,13 @@ export function DocImage({
           if (seq === persistSeq.current) setPersistMsg("");
         }, 1_600);
       } catch {
-        // 화면은 맞춰 둔 상태 유지
         setPersistMsg("화면은 맞춤 · 저장만 실패");
       }
     } catch {
       setTurn(deg);
-      setPersistMsg("방향 맞추기 실패");
+      setPersistMsg("방향 맞추기 실패 · 다시 눌러 주세요");
     } finally {
+      window.clearTimeout(bakeTimer);
       if (seq === persistSeq.current) setPersisting(false);
     }
   }

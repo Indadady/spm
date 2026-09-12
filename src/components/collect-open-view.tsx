@@ -96,7 +96,10 @@ export function CollectOpenView({
   const [draggingId, setDraggingId] = useState("");
   const [overId, setOverId] = useState("");
   const [savingOrder, setSavingOrder] = useState(false);
+  const [orderDirty, setOrderDirty] = useState(false);
+  const [orderSavedOk, setOrderSavedOk] = useState(false);
   const orderReady = useRef(false);
+  const savedOrderRef = useRef<string>("");
 
   useEffect(() => {
     if (!id) return;
@@ -108,18 +111,47 @@ export function CollectOpenView({
   useEffect(() => {
     orderReady.current = false;
     setOrderIds([]);
+    setOrderDirty(false);
+    setOrderSavedOk(false);
+    savedOrderRef.current = "";
   }, [id]);
 
   useEffect(() => {
     if (!campaign || !id) return;
+    const serverOrder = campaign.entryOrder?.length ? campaign.entryOrder : [];
+    const localOrder = readStoredOrder(id);
     if (!orderReady.current) {
-      const seed = campaign.entryOrder?.length ? campaign.entryOrder : readStoredOrder(id);
-      setOrderIds(mergeEntryOrder(seed, inbox.rows));
+      const seed = serverOrder.length ? serverOrder : localOrder;
+      const merged = mergeEntryOrder(seed, inbox.rows);
+      setOrderIds(merged);
+      savedOrderRef.current = merged.join("|");
       orderReady.current = true;
+      setOrderDirty(false);
+      setOrderSavedOk(Boolean(serverOrder.length || localOrder.length));
+      return;
+    }
+    if (orderDirty) {
+      setOrderIds((prev) => mergeEntryOrder(prev, inbox.rows));
+      return;
+    }
+    if (serverOrder.length) {
+      const fromServer = mergeEntryOrder(serverOrder, inbox.rows);
+      setOrderIds(fromServer);
+      savedOrderRef.current = fromServer.join("|");
       return;
     }
     setOrderIds((prev) => mergeEntryOrder(prev, inbox.rows));
-  }, [campaign, id, inbox.rows]);
+  }, [campaign, id, inbox.rows, orderDirty]);
+
+  useEffect(() => {
+    if (!orderDirty) return;
+    const onLeave = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onLeave);
+    return () => window.removeEventListener("beforeunload", onLeave);
+  }, [orderDirty]);
 
   const rows = useMemo(() => sortEntriesByOrder(inbox.rows, orderIds), [inbox.rows, orderIds]);
 
@@ -128,16 +160,32 @@ export function CollectOpenView({
     return groupNoticeText(campaign.title, campaign.kind);
   }, [campaign]);
 
-  async function persistOrder(next: string[]) {
-    if (!campaign) return;
+  function applyLocalOrder(next: string[]) {
+    setOrderIds(next);
+    writeStoredOrder(campaign?.id ?? id, next);
+    const sig = next.join("|");
+    const dirty = sig !== savedOrderRef.current;
+    setOrderDirty(dirty);
+    if (dirty) setOrderSavedOk(false);
+  }
+
+  async function saveOrder() {
+    if (!campaign) return false;
+    const next = mergeEntryOrder(orderIds, inbox.rows);
     setOrderIds(next);
     writeStoredOrder(campaign.id, next);
     setSavingOrder(true);
+    setError("");
     try {
       await patchCampaign(campaign.id, { entryOrder: next });
       rememberCampaign({ ...campaign, entryOrder: next });
+      savedOrderRef.current = next.join("|");
+      setOrderDirty(false);
+      setOrderSavedOk(true);
+      return true;
     } catch {
-      setError("순서를 저장하지 못했습니다. 화면 순서는 유지되며 엑셀에는 반영됩니다.");
+      setError("순서를 저장하지 못했습니다. 연결을 확인하고 「순서 저장」을 다시 눌러 주세요.");
+      return false;
     } finally {
       setSavingOrder(false);
     }
@@ -149,7 +197,7 @@ export function CollectOpenView({
     const from = keys.indexOf(fromId);
     const to = keys.indexOf(toId);
     if (from < 0 || to < 0) return;
-    void persistOrder(moveIndex(keys, from, to));
+    applyLocalOrder(moveIndex(keys, from, to));
   }
 
   if (waiting) {
@@ -184,7 +232,7 @@ export function CollectOpenView({
             {expected ? `${expected}명 중 ${count}명 제출` : `${count}명 제출`}
             {inbox.status === "connecting" ? " · 연결 중" : ""}
             {!office && campaign.departPin ? ` · 출발일 ${campaign.departPin}` : ""}
-            {savingOrder ? " · 순서 저장 중" : ""}
+            {orderDirty ? " · 순서 미저장" : orderSavedOk ? " · 순서 저장됨" : ""}
           </p>
         </div>
 
@@ -224,10 +272,25 @@ export function CollectOpenView({
           <Button
             type="button"
             size="sm"
+            variant={orderDirty ? "default" : "outline"}
+            disabled={inbox.rows.length === 0 || savingOrder || !orderDirty}
+            onClick={async () => {
+              await saveOrder();
+            }}
+          >
+            {savingOrder ? "순서 저장 중…" : orderDirty ? "순서 저장" : "순서 저장됨"}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
             variant="outline"
             disabled={inbox.rows.length === 0 || Boolean(exporting)}
             onClick={async () => {
               setError("");
+              if (orderDirty) {
+                const ok = await saveOrder();
+                if (!ok) return;
+              }
               const exportRows: GroupEntry[] = rows.map((row) => ({ ...row }));
               if (needsPassport(campaign.kind)) {
                 const pending = exportRows.filter(
@@ -346,7 +409,13 @@ export function CollectOpenView({
         ) : (
           <>
             <p className="text-xs leading-relaxed text-muted-foreground">
-              왼쪽 ☰을 끌어 가족·부서 순으로 정리하면 바로 저장되고, 명단 엑셀 순서도 같습니다.
+              왼쪽 ☰으로 가족·부서 순을 맞춘 뒤 <span className="font-semibold text-foreground">「순서 저장」</span>
+              을 눌러 주세요. 저장해야 새로고침·다른 기기·명단 엑셀에 그대로 남습니다.
+              {orderDirty ? (
+                <span className="mt-1 block font-medium text-[color:var(--gold-ink)]">
+                  순서를 바꿨습니다. 아직 저장되지 않았습니다.
+                </span>
+              ) : null}
             </p>
             <ul className="space-y-2">
               {rows.map((row, index) => {
@@ -413,7 +482,7 @@ export function CollectOpenView({
                               aria-label="위로"
                               onClick={() => {
                                 const keys = rows.map(entryKey);
-                                void persistOrder(moveIndex(keys, index, index - 1));
+                                void applyLocalOrder(moveIndex(keys, index, index - 1));
                               }}
                             >
                               ↑
@@ -427,7 +496,7 @@ export function CollectOpenView({
                               aria-label="아래로"
                               onClick={() => {
                                 const keys = rows.map(entryKey);
-                                void persistOrder(moveIndex(keys, index, index + 1));
+                                void applyLocalOrder(moveIndex(keys, index, index + 1));
                               }}
                             >
                               ↓
