@@ -31,6 +31,8 @@ export type GroupCampaign = {
   ogSlot?: number;
   /** 출발일 6자리 YYMMDD. 내부 직원이 자료를 볼 때 비밀번호로 씁니다. */
   departPin?: string;
+  /** 명단 화면·엑셀에 쓸 제출 순서(remoteId). 드래그로 바꿉니다. */
+  entryOrder?: string[];
   createdAt: string;
 };
 
@@ -122,10 +124,13 @@ export function formatRrn(rrn?: string) {
 
 export function looksLikePassportName(name?: string) {
   const n = (name ?? "").trim().toUpperCase().replace(/\s+/g, " ");
-  if (n.length < 4) return false;
+  if (n.length < 4 || n.length > 36) return false;
+  if (/(.)\1{2,}/.test(n.replace(/\s/g, ""))) return false;
+  if (/[CL]{4,}/.test(n)) return false;
   const parts = n.split(" ");
-  if (parts.length >= 2 && parts.every((p) => /^[A-Z]{2,}$/.test(p))) return true;
-  return /^[A-Z]{2,12} [A-Z]{2,20}$/.test(n);
+  if (parts.some((p) => p.length > 14)) return false;
+  if (parts.length >= 2 && parts.every((p) => /^[A-Z]{2,14}$/.test(p))) return true;
+  return /^[A-Z]{2,12} [A-Z]{2,14}$/.test(n);
 }
 
 export function markPassportScan(
@@ -208,10 +213,48 @@ function collectionPath(name: string) {
   return collection(db, "artifacts", SURVEY_APP_ID, "public", "data", name);
 }
 
+export function entryKey(row: Pick<GroupEntry, "remoteId" | "name" | "submittedAt">) {
+  return row.remoteId || `${row.name}-${row.submittedAt ?? ""}`;
+}
+
+export function sortEntriesByOrder(rows: GroupEntry[], orderIds?: string[] | null) {
+  if (!rows.length) return [];
+  if (!orderIds?.length) {
+    return [...rows].sort((a, b) => (a.submittedAt ?? "").localeCompare(b.submittedAt ?? ""));
+  }
+  const byId = new Map(rows.map((row) => [entryKey(row), row]));
+  const seen = new Set<string>();
+  const ordered: GroupEntry[] = [];
+  for (const id of orderIds) {
+    const row = byId.get(id);
+    if (!row || seen.has(id)) continue;
+    ordered.push(row);
+    seen.add(id);
+  }
+  const rest = rows
+    .filter((row) => !seen.has(entryKey(row)))
+    .sort((a, b) => (a.submittedAt ?? "").localeCompare(b.submittedAt ?? ""));
+  return [...ordered, ...rest];
+}
+
+/** 새 제출이 들어오면 기존 순서를 유지하고 맨 뒤에 붙입니다. */
+export function mergeEntryOrder(prev: string[] | undefined, rows: GroupEntry[]) {
+  const keys = rows.map(entryKey);
+  const keySet = new Set(keys);
+  const kept = (prev ?? []).filter((id) => keySet.has(id));
+  const keptSet = new Set(kept);
+  const added = keys.filter((id) => !keptSet.has(id));
+  return [...kept, ...added];
+}
+
 export function campaignFromDoc(id: string, data: Record<string, unknown>): GroupCampaign {
   const expected = Number(data.expectedCount);
   const ogSlot = Number(data.ogSlot);
   const departPin = normalizeDepartPin(String(data.departPin ?? data.pin ?? ""));
+  const rawOrder = data.entryOrder;
+  const entryOrder = Array.isArray(rawOrder)
+    ? rawOrder.map((v) => String(v)).filter(Boolean)
+    : undefined;
   return {
     id,
     title: String(data.title ?? ""),
@@ -219,6 +262,7 @@ export function campaignFromDoc(id: string, data: Record<string, unknown>): Grou
     expectedCount: expected > 0 ? expected : undefined,
     ogSlot: ogSlot >= 1 && ogSlot <= 3 ? ogSlot : undefined,
     departPin: validDepartPin(departPin) ? departPin : undefined,
+    entryOrder: entryOrder?.length ? entryOrder : undefined,
     createdAt: String(data.createdAt ?? ""),
   };
 }
@@ -381,14 +425,15 @@ export async function submitGroupEntry(campaign: GroupCampaign, entry: GroupEntr
 
 export async function patchCampaign(
   campaignId: string,
-  fields: Partial<Pick<GroupCampaign, "departPin" | "title" | "expectedCount">>
+  fields: Partial<Pick<GroupCampaign, "departPin" | "title" | "expectedCount" | "entryOrder">>
 ) {
   if (!campaignId) return;
   await withTimeout(ensureAnonAuth(), 8_000, "auth");
-  const payload: Record<string, string | number> = {};
+  const payload: Record<string, string | number | string[]> = {};
   if (fields.departPin && validDepartPin(fields.departPin)) payload.departPin = normalizeDepartPin(fields.departPin);
   if (fields.title) payload.title = fields.title;
   if (fields.expectedCount) payload.expectedCount = fields.expectedCount;
+  if (fields.entryOrder) payload.entryOrder = fields.entryOrder;
   if (Object.keys(payload).length === 0) return;
   await withTimeout(updateDoc(doc(groupCampaignsCol(), campaignId), payload), 8_000, "save");
 }
@@ -457,7 +502,7 @@ export function subscribeGroupEntries(
         (snap) => {
           const rows = snap.docs
             .map((d) => entryFromDoc(d.id, d.data(), "firebase"))
-            .sort((a, b) => (b.submittedAt ?? "").localeCompare(a.submittedAt ?? ""));
+            .sort((a, b) => (a.submittedAt ?? "").localeCompare(b.submittedAt ?? ""));
           onChange(rows, "live");
         },
         () => onChange([], "local")
@@ -473,8 +518,8 @@ export function subscribeGroupEntries(
   };
 }
 
-function rosterRows(rows: GroupEntry[]) {
-  return [...rows].sort((a, b) => (a.submittedAt ?? "").localeCompare(b.submittedAt ?? ""));
+function rosterRows(rows: GroupEntry[], orderIds?: string[] | null) {
+  return sortEntriesByOrder(rows, orderIds);
 }
 
 function birthGender(row: GroupEntry) {
@@ -503,8 +548,8 @@ function excelWarnPassport(row: GroupEntry) {
   };
 }
 
-export function groupEntriesXlsx(kind: CollectKind, rows: GroupEntry[]) {
-  const ordered = rosterRows(rows);
+export function groupEntriesXlsx(kind: CollectKind, rows: GroupEntry[], orderIds?: string[] | null) {
+  const ordered = rosterRows(rows, orderIds);
   const sheets: RosterSheet[] = [];
   if (needsPassport(kind)) {
     sheets.push({

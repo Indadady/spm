@@ -214,28 +214,63 @@ function lettersOnlyName(raw: string) {
     .trim();
 }
 
+/** OCR가 MRZ 필러 `<`를 L/C 연속으로 읽은 꼬리를 자른다. */
+function stripMrzFillerTail(token: string) {
+  let s = token.replace(/[^A-Z]/g, "");
+  if (!s) return "";
+  const filler = s.search(/C?L{3,}|L{3,}|C{3,}|(.)\1{2,}/);
+  if (filler >= 2) s = s.slice(0, filler);
+  if (s.length > 14) s = s.slice(0, 14);
+  return s;
+}
+
+function sanitizePassportName(raw: string) {
+  const n = lettersOnlyName(raw);
+  if (!n) return "";
+  const parts = n
+    .split(" ")
+    .map(stripMrzFillerTail)
+    .filter((p) => p.length >= 2 && !NAME_NOISE.has(p));
+  if (!parts.length) return "";
+  const surnameAt = parts.findIndex((p) => SURNAMES.has(p));
+  if (surnameAt >= 0) {
+    const surname = parts[surnameAt] ?? "";
+    const given = parts.slice(surnameAt + 1).filter((p) => p !== surname && !SURNAMES.has(p));
+    return [surname, ...given.slice(0, 3)].join(" ").trim();
+  }
+  return parts.slice(0, 4).join(" ").trim();
+}
+
 function nameLooksGood(name: string) {
-  const n = lettersOnlyName(name);
-  if (n.length < 3 || n.length > 40) return false;
+  const n = sanitizePassportName(name);
+  if (n.length < 3 || n.length > 36) return false;
+  if (/(.)\1{2,}/.test(n.replace(/\s/g, ""))) return false;
   const parts = n.split(" ");
+  if (parts.some((p) => p.length > 14)) return false;
   if (parts.some((p) => p.length === 1 && p !== "A")) return parts.length >= 2 && n.length >= 6;
   return /[A-Z]{2,}/.test(n);
 }
 
 function nameScore(name: string) {
-  const n = lettersOnlyName(name);
+  const n = sanitizePassportName(name);
   if (!n) return 0;
   let score = Math.min(n.length, 18);
   const parts = n.split(" ");
   if (parts.length >= 2) score += 8;
   if (SURNAMES.has(parts[0] ?? "")) score += 10;
   if (/[0-9]/.test(name)) score -= 6;
+  if (/(.)\1{2,}/.test(n.replace(/\s/g, ""))) score -= 20;
+  if (parts.some((p) => p.length > 12)) score -= 10;
+  // 짧은·깔끔한 이름이 필러 붙은 긴 이름보다 유리하게
+  score += Math.max(0, 12 - Math.abs(n.length - 10));
   if (NAME_NOISE.has(n)) return 0;
   return score;
 }
 
 function betterName(a: string, b: string) {
-  return nameScore(b) > nameScore(a) ? lettersOnlyName(b) : lettersOnlyName(a);
+  const left = sanitizePassportName(a);
+  const right = sanitizePassportName(b);
+  return nameScore(right) > nameScore(left) ? right : left;
 }
 
 function betterNo(a: string, b: string) {
@@ -272,10 +307,13 @@ export function mergePassportScan(
 function displayName(line1: string) {
   const names = line1.slice(5).replace(/<+$/g, "");
   if (!names.includes("<<")) {
-    return lettersOnlyName(names);
+    return sanitizePassportName(names);
   }
   const [surname = "", given = ""] = names.split("<<");
-  return lettersOnlyName(`${surname.replace(/</g, " ")} ${given.replace(/</g, " ")}`);
+  // `<` 앞의 알파벳만 이름. 필러·꼬리 잡음(RK 등) 제거
+  const sur = surname.match(/^[A-Z]+/)?.[0] ?? stripMrzFillerTail(surname.replace(/</g, ""));
+  const giv = given.match(/^[A-Z]+/)?.[0] ?? stripMrzFillerTail(given.replace(/</g, ""));
+  return sanitizePassportName(`${sur} ${giv}`);
 }
 
 function recoverPKOR(raw: string) {
@@ -296,7 +334,10 @@ function cleanLine(raw: string) {
       .replace(/[\u00AB\u2039\u3008\uFF1C]/g, "<")
       .replace(/[(\[{]/g, "<")
       .replace(/[^A-Z0-9<\n]/g, "")
+      // MRZ 필러 `<`를 L/C 연속으로 읽은 경우
+      .replace(/L{3,}/g, (m) => "<".repeat(m.length))
       .replace(/C{2,}/g, (m) => "<".repeat(m.length))
+      .replace(/C</g, "<<")
   );
 }
 
@@ -476,21 +517,27 @@ export function parseVisualEnglishName(text: string) {
   for (const line of lines) {
     if (line.includes("<") || /P<KOR/.test(line)) continue;
     for (const token of line.split(/[ /]+/)) {
-      if (!token || NAME_NOISE.has(token) || token.length < 2 || token.length > 16) continue;
-      if (!/^[A-Z]+$/.test(token)) continue;
-      tokens.push(token);
+      const cleaned = stripMrzFillerTail(token);
+      if (!cleaned || NAME_NOISE.has(cleaned) || cleaned.length < 2 || cleaned.length > 14) continue;
+      if (!/^[A-Z]+$/.test(cleaned)) continue;
+      if (/(.)\1{2,}/.test(cleaned)) continue;
+      tokens.push(cleaned);
     }
   }
   if (!tokens.length) return "";
   const surnameAt = tokens.findIndex((t) => SURNAMES.has(t));
   if (surnameAt >= 0) {
     const given = tokens.slice(surnameAt + 1, surnameAt + 4).filter((t) => !SURNAMES.has(t) || t === tokens[surnameAt]);
-    const name = [tokens[surnameAt], ...given.filter((t) => t !== tokens[surnameAt])].join(" ").trim();
+    const name = sanitizePassportName(
+      [tokens[surnameAt], ...given.filter((t) => t !== tokens[surnameAt])].join(" ")
+    );
     if (nameScore(name) >= 12) return name;
   }
   for (let i = 0; i < tokens.length - 1; i += 1) {
-    const pair = `${tokens[i]} ${tokens[i + 1]}${tokens[i + 2] ? ` ${tokens[i + 2]}` : ""}`;
-    if (nameScore(pair) >= 16) return pair.trim();
+    const pair = sanitizePassportName(
+      `${tokens[i]} ${tokens[i + 1]}${tokens[i + 2] ? ` ${tokens[i + 2]}` : ""}`
+    );
+    if (nameScore(pair) >= 16) return pair;
   }
   return "";
 }

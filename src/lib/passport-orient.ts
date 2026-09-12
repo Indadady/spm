@@ -164,3 +164,8 @@ export async function uprightImageSrc(src: string) {
   return canvasToJpegUrl(canvas, 0.92);
 }
 
+export async function rotateImageSrc(src: string, deg: Rotation) {
+  if (!deg) return src;
+  return canvasToJpegUrl(rotateCanvas(await inputToCanvas(src), deg), 0.92);
+}
+
