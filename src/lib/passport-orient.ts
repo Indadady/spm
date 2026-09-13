@@ -178,7 +178,8 @@ async function inputToCanvas(input: File | string) {
 export async function uprightPassportFile(file: File) {
   const { canvas, rotation } = uprightPassportCanvas(await inputToCanvas(file));
   if (!rotation) return file;
-  return canvasToJpegFile(canvas, file.name, 0.92);
+  // 회전 시에만 재인코딩. 최종 Storage 크기는 fileForDownload에서 맞춥니다.
+  return canvasToJpegFile(canvas, file.name, 0.85);
 }
 
 export async function uprightImageSrc(src: string) {

@@ -4,7 +4,7 @@ import { SignPad } from "@/components/sign-pad";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { fileToJpeg } from "@/lib/image-file";
+import { fileForDownload, fileToJpeg } from "@/lib/image-file";
 import { submitPayee } from "@/lib/payee-inbox";
 import { payeeMissing } from "@/lib/payout-types";
 import { useStore } from "@/lib/store";
@@ -26,7 +26,7 @@ function PhotoPick({
   hint: string;
   value: string;
   fileName: string;
-  /** preview는 화면용 축소본, original은 Storage 업로드용 원본 */
+  /** preview는 화면용 축소본, original은 Storage 업로드용(이미 축소된) 파일 */
   onChange: (preview: string, fileName: string, original: File) => void;
 }) {
   const [error, setError] = useState("");
@@ -49,7 +49,8 @@ function PhotoPick({
             const file = e.target.files?.[0];
             if (!file) return;
             try {
-              onChange(await fileToJpeg(file), file.name, file);
+              const stored = await fileForDownload(file).catch(() => file);
+              onChange(await fileToJpeg(stored), file.name, stored);
               setError("");
             } catch {
               setError("사진을 다시 선택해 주세요.");

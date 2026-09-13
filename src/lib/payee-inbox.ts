@@ -63,7 +63,7 @@ async function uploadDataUrl(payoutId: string, dataUrl: string, fileName: string
   return withTimeout(getDownloadURL(fileRef), 8_000, "url");
 }
 
-/** 고객이 고른 원본(또는 거의 원본)을 Storage에 올립니다. 미리보기용 JPEG 압축본을 올리지 않습니다. */
+/** Storage용으로 줄인 JPEG를 올립니다. 미리보기(640) 품질은 쓰지 않습니다. */
 async function uploadOriginalFile(payoutId: string, file: File, kind: "id" | "passport") {
   const { storage } = getFirebase();
   if (!storage) return undefined;

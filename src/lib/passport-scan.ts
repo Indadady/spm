@@ -399,10 +399,28 @@ async function scanOrientedImage(img: HTMLCanvasElement): Promise<PassportScan |
   return best;
 }
 
+/** OCR 전에 긴 변을 이 이하로 줄여 메모리·인식 시간을 줄입니다. MRZ 크롭은 이후 다시 확대합니다. */
+const OCR_MAX_EDGE = 1600;
+
+function downscaleForOcr(src: HTMLCanvasElement) {
+  const edge = Math.max(src.width, src.height);
+  if (edge <= OCR_MAX_EDGE) return src;
+  const scale = OCR_MAX_EDGE / edge;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(src.width * scale));
+  canvas.height = Math.max(1, Math.round(src.height * scale));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return src;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(src, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
 export async function scanPassportImage(input: File | string): Promise<PassportScan | null> {
   try {
     const blob = await blobFromInput(input);
-    const raw = await canvasFromBlob(blob);
+    const raw = downscaleForOcr(await canvasFromBlob(blob));
     // 고객이 가로·세로로 찍은 사진을 모두 시도 — 방향 탐지만으로는 부족한 경우가 많음
     const detected = detectPassportRotation(raw);
     const degs: Array<0 | 90 | 180 | 270> = [detected, 0, 90, 180, 270].filter(

@@ -378,6 +378,7 @@ export async function submitGroupEntry(campaign: GroupCampaign, entry: GroupEntr
   let passportImageUrl = entry.passportImageUrl ?? "";
   if (originalFile) {
     try {
+      // fileForDownload: 휴대폰 원본을 Storage용(긴 변 1920·품질 0.82)으로 줄인 뒤 업로드
       const stored = await fileForDownload(originalFile);
       passportImageUrl = (await uploadPassportFile(campaign.id, stored)) ?? "";
     } catch {

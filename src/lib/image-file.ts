@@ -3,6 +3,14 @@ export function dataUrlBytes(dataUrl: string) {
   return comma >= 0 ? Math.ceil(((dataUrl.length - comma - 1) * 3) / 4) : dataUrl.length;
 }
 
+/** Storage 업로드용. 여권 판독·인쇄에 충분하면서 모바일 전송을 줄입니다. */
+const STORAGE_MAX_EDGE = 1920;
+const STORAGE_QUALITY = 0.82;
+/** 이미 충분히 작은 JPEG는 재인코딩 생략 */
+const STORAGE_SKIP_BYTES = 750_000;
+const STORAGE_FALLBACK_EDGE = 1440;
+const STORAGE_FALLBACK_QUALITY = 0.72;
+
 async function canvasJpeg(
   img: HTMLImageElement | ImageBitmap,
   max: number,
@@ -22,6 +30,34 @@ async function canvasJpeg(
   return canvas.toDataURL("image/jpeg", quality);
 }
 
+function canvasToBlob(
+  img: HTMLImageElement | ImageBitmap,
+  max: number,
+  quality: number
+): Promise<Blob> {
+  const w = "naturalWidth" in img ? img.naturalWidth || img.width : img.width;
+  const h = "naturalHeight" in img ? img.naturalHeight || img.height : img.height;
+  const scale = Math.min(1, max / Math.max(w, h));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(w * scale));
+  canvas.height = Math.max(1, Math.round(h * scale));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return Promise.reject(new Error("이미지를 줄이지 못했습니다."));
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error("이미지를 줄이지 못했습니다."));
+      },
+      "image/jpeg",
+      quality
+    );
+  });
+}
+
 function loadImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const el = new Image();
@@ -38,12 +74,15 @@ function loadImage(src: string) {
   });
 }
 
-async function canvasFromSource(src: string | File, max: number, quality: number) {
+async function withImageSource<T>(
+  src: string | File,
+  run: (img: HTMLImageElement | ImageBitmap) => Promise<T>
+) {
   if (typeof src !== "string" && typeof createImageBitmap === "function") {
     try {
       const bmp = await createImageBitmap(src, { imageOrientation: "from-image" });
       try {
-        return await canvasJpeg(bmp, max, quality);
+        return await run(bmp);
       } finally {
         bmp.close();
       }
@@ -53,10 +92,18 @@ async function canvasFromSource(src: string | File, max: number, quality: number
   }
   const url = typeof src === "string" ? src : URL.createObjectURL(src);
   try {
-    return canvasJpeg(await loadImage(url), max, quality);
+    return await run(await loadImage(url));
   } finally {
     if (typeof src !== "string") URL.revokeObjectURL(url);
   }
+}
+
+async function canvasFromSource(src: string | File, max: number, quality: number) {
+  return withImageSource(src, (img) => canvasJpeg(img, max, quality));
+}
+
+async function blobFromSource(src: string | File, max: number, quality: number) {
+  return withImageSource(src, (img) => canvasToBlob(img, max, quality));
 }
 
 const EMBED_LIMIT = 220_000;
@@ -70,20 +117,16 @@ export async function fileToJpeg(file: File, max = 640, quality = 0.48): Promise
   return canvasJpeg(await loadImage(jpeg), 360, 0.35);
 }
 
-function keepOriginalFile(file: File) {
-  if (file.size <= 0) return false;
+function jpegFileName(fileName: string) {
+  const base = fileName.replace(/\.[^.]+$/, "") || "passport";
+  return `${base}.jpg`;
+}
+
+function isJpegLike(file: File) {
   const type = file.type.toLowerCase();
-  if (
-    type === "image/jpeg" ||
-    type === "image/jpg" ||
-    type === "image/png" ||
-    type === "image/webp"
-  ) {
-    return true;
-  }
-  // 타입이 비어 있어도 확장자가 일반 사진이면 원본 유지
+  if (type === "image/jpeg" || type === "image/jpg") return true;
   if (!type || type === "application/octet-stream") {
-    return /\.(jpe?g|png|webp)$/i.test(file.name);
+    return /\.jpe?g$/i.test(file.name);
   }
   return false;
 }
@@ -91,29 +134,31 @@ function keepOriginalFile(file: File) {
 async function dataUrlToJpegFile(dataUrl: string, fileName: string) {
   const res = await fetch(dataUrl);
   const blob = await res.blob();
-  const base = fileName.replace(/\.[^.]+$/, "") || "passport";
-  return new File([blob], `${base}.jpg`, { type: "image/jpeg" });
+  return new File([blob], jpegFileName(fileName), { type: "image/jpeg" });
 }
 
 /**
  * Storage에 올릴 파일.
- * jpeg/png/webp는 손대지 않고, HEIC 등만 고화질 JPEG로 바꿉니다.
+ * 휴대폰 원본(수 MB)을 그대로 올리지 않고, 여권 판독에 충분한 크기로 줄입니다.
  */
 export async function fileForDownload(file: File): Promise<File> {
-  if (keepOriginalFile(file)) return file;
-  const jpeg = await canvasFromSource(file, 4096, 0.95);
-  return dataUrlToJpegFile(jpeg, file.name);
+  if (file.size > 0 && isJpegLike(file) && file.size <= STORAGE_SKIP_BYTES) {
+    return file;
+  }
+  const blob = await blobFromSource(file, STORAGE_MAX_EDGE, STORAGE_QUALITY);
+  return new File([blob], jpegFileName(file.name), { type: "image/jpeg" });
 }
 
 /**
- * 원본 업로드가 실패했을 때만 쓰는 Storage용 고화질본.
+ * 원본 업로드가 실패했을 때만 쓰는 Storage용 축소본.
  * 미리보기(640·48%)를 올리지 않습니다.
  */
 export async function fileForStorageFallback(file: File): Promise<File> {
   try {
-    return await fileForDownload(file);
+    const blob = await blobFromSource(file, STORAGE_FALLBACK_EDGE, STORAGE_FALLBACK_QUALITY);
+    return new File([blob], jpegFileName(file.name), { type: "image/jpeg" });
   } catch {
-    const jpeg = await canvasFromSource(file, 3200, 0.92);
+    const jpeg = await canvasFromSource(file, STORAGE_FALLBACK_EDGE, STORAGE_FALLBACK_QUALITY);
     return dataUrlToJpegFile(jpeg, file.name);
   }
 }

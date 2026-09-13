@@ -12,7 +12,7 @@ import {
   submitGroupEntry,
   type GroupCampaign,
 } from "@/lib/group-collect";
-import { fileToJpeg } from "@/lib/image-file";
+import { fileForDownload, fileToJpeg } from "@/lib/image-file";
 import { ensureAnonAuth } from "@/lib/firebase";
 import { scanPassportImage, scorePassportScan, type PassportScan } from "@/lib/passport-scan";
 import { uprightPassportFile } from "@/lib/passport-orient";
@@ -173,9 +173,12 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
                 try {
                   const upright = await uprightPassportFile(file);
                   passportFile.current = upright;
-                  setPassportImage(await fileToJpeg(upright));
                   setPassportFileName(file.name);
-                  const pending = scanPassportImage(upright);
+                  setPassportImage(await fileToJpeg(upright));
+                  // Storage용 축소본을 미리 만들어 두어 제출 시 전송량을 줄입니다.
+                  const stored = await fileForDownload(upright).catch(() => upright);
+                  passportFile.current = stored;
+                  const pending = scanPassportImage(stored);
                   scanWait.current = pending;
                   const hit = await pending;
                   setScan(hit);
@@ -238,8 +241,8 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
         {agreeLabel(campaign)}
       </label>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      <Button type="submit" className="w-full" disabled={sending || scanState === "reading"}>
-        {sending ? "보내는 중…" : scanState === "reading" ? "여권 읽는 중…" : "제출"}
+      <Button type="submit" className="w-full" disabled={sending}>
+        {sending ? "보내는 중…" : "제출"}
       </Button>
     </form>
   );
