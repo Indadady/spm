@@ -320,6 +320,25 @@ async function uploadPassportFile(campaignId: string, file: File) {
   return withTimeout(getDownloadURL(fileRef), 8_000, "url");
 }
 
+/**
+ * 사진 선택 직후 백그라운드로 Storage에 올려 둡니다.
+ * 제출 시점에는 URL만 Firestore에 쓰면 됩니다.
+ */
+export async function prepareGroupPassportUpload(campaignId: string, file: File): Promise<string> {
+  await withTimeout(ensureAnonAuth(), 8_000, "auth");
+  try {
+    const stored = await fileForDownload(file);
+    return (await uploadPassportFile(campaignId, stored)) ?? "";
+  } catch {
+    try {
+      const fallback = await fileForStorageFallback(file);
+      return (await uploadPassportFile(campaignId, fallback)) ?? "";
+    } catch {
+      return "";
+    }
+  }
+}
+
 async function uploadDataUrl(campaignId: string, dataUrl: string, fileName: string) {
   const { storage } = getFirebase();
   if (!storage) return undefined;
@@ -374,11 +393,10 @@ export async function listCampaigns(): Promise<GroupCampaign[]> {
 export async function submitGroupEntry(campaign: GroupCampaign, entry: GroupEntry, originalFile?: File) {
   await withTimeout(ensureAnonAuth(), 8_000, "auth");
   const preview = entry.passportImageDataUrl ?? "";
-  const passportEmbed = preview && dataUrlBytes(preview) <= 220_000 ? preview : "";
   let passportImageUrl = entry.passportImageUrl ?? "";
-  if (originalFile) {
+  // 선택 시 미리 올려 둔 URL이 없으면 이때 올립니다.
+  if (!passportImageUrl && originalFile) {
     try {
-      // fileForDownload: 휴대폰 원본을 Storage용(긴 변 1920·품질 0.82)으로 줄인 뒤 업로드
       const stored = await fileForDownload(originalFile);
       passportImageUrl = (await uploadPassportFile(campaign.id, stored)) ?? "";
     } catch {
@@ -398,6 +416,9 @@ export async function submitGroupEntry(campaign: GroupCampaign, entry: GroupEntr
       passportImageUrl = "";
     }
   }
+  // Storage URL이 있으면 Firestore에 base64(최대 ~220KB)를 넣지 않아 제출이 빨라집니다.
+  const passportEmbed =
+    passportImageUrl || !preview || dataUrlBytes(preview) > 220_000 ? "" : preview;
   const payload = {
     kind: "spm-group-entry",
     createdAt: entry.submittedAt ?? new Date().toISOString(),

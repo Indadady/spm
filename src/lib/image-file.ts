@@ -3,13 +3,13 @@ export function dataUrlBytes(dataUrl: string) {
   return comma >= 0 ? Math.ceil(((dataUrl.length - comma - 1) * 3) / 4) : dataUrl.length;
 }
 
-/** Storage 업로드용. 여권 판독·인쇄에 충분하면서 모바일 전송을 줄입니다. */
-const STORAGE_MAX_EDGE = 1920;
-const STORAGE_QUALITY = 0.82;
+/** Storage 업로드용. 여권 판독에 충분하면서 제출 전송을 줄입니다. */
+const STORAGE_MAX_EDGE = 1600;
+const STORAGE_QUALITY = 0.78;
 /** 이미 충분히 작은 JPEG는 재인코딩 생략 */
-const STORAGE_SKIP_BYTES = 750_000;
-const STORAGE_FALLBACK_EDGE = 1440;
-const STORAGE_FALLBACK_QUALITY = 0.72;
+const STORAGE_SKIP_BYTES = 420_000;
+const STORAGE_FALLBACK_EDGE = 1280;
+const STORAGE_FALLBACK_QUALITY = 0.7;
 
 async function canvasJpeg(
   img: HTMLImageElement | ImageBitmap,

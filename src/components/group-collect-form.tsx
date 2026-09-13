@@ -8,6 +8,7 @@ import {
   needsPassport,
   needsRrn,
   parseRrnMeta,
+  prepareGroupPassportUpload,
   rosterDate,
   submitGroupEntry,
   type GroupCampaign,
@@ -42,6 +43,9 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
   const [scanState, setScanState] = useState<"idle" | "reading" | "ok" | "partial" | "fail">("idle");
   const scanWait = useRef<Promise<PassportScan | null> | null>(null);
   const passportFile = useRef<File | null>(null);
+  const passportUrl = useRef("");
+  const uploadWait = useRef<Promise<string> | null>(null);
+  const uploadToken = useRef(0);
   const [agree, setAgree] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
@@ -89,6 +93,10 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
         setError("");
         try {
           const read = wantPass ? scan ?? (await scanWait.current) : null;
+          let imageUrl = wantPass ? passportUrl.current : "";
+          if (wantPass && !imageUrl && uploadWait.current) {
+            imageUrl = (await uploadWait.current) || "";
+          }
           await submitGroupEntry(
             campaign,
             {
@@ -102,13 +110,15 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
               passportNo: read?.passportNo,
               passportExpiry: read?.passportExpiry,
               nationality: read?.nationality || (wantPass ? "KOR" : undefined),
-              passportImageDataUrl: wantPass ? passportImage : undefined,
+              passportImageDataUrl: wantPass && !imageUrl ? passportImage : undefined,
+              passportImageUrl: imageUrl || undefined,
               passportFileName: wantPass ? passportFileName : undefined,
               passportScan: wantPass ? markPassportScan(read) : undefined,
               privacyAgreed: true,
               submittedAt: new Date().toISOString(),
             },
-            wantPass ? passportFile.current ?? undefined : undefined
+            // URL이 이미 있으면 제출 때 다시 올리지 않습니다.
+            wantPass && !imageUrl ? passportFile.current ?? undefined : undefined
           );
           setDone(true);
         } catch {
@@ -170,17 +180,27 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
                 setScan(null);
                 setScanState("reading");
                 setError("");
+                passportUrl.current = "";
+                uploadWait.current = null;
+                const token = ++uploadToken.current;
                 try {
                   const upright = await uprightPassportFile(file);
                   passportFile.current = upright;
                   setPassportFileName(file.name);
                   setPassportImage(await fileToJpeg(upright));
-                  // Storage용 축소본을 미리 만들어 두어 제출 시 전송량을 줄입니다.
                   const stored = await fileForDownload(upright).catch(() => upright);
+                  if (token !== uploadToken.current) return;
                   passportFile.current = stored;
+                  // OCR과 동시에 Storage 업로드를 시작해, 제출 때 대기 시간을 줄입니다.
+                  const uploading = prepareGroupPassportUpload(campaign.id, stored).then((url) => {
+                    if (token === uploadToken.current) passportUrl.current = url;
+                    return url;
+                  });
+                  uploadWait.current = uploading;
                   const pending = scanPassportImage(stored);
                   scanWait.current = pending;
                   const hit = await pending;
+                  if (token !== uploadToken.current) return;
                   setScan(hit);
                   setScanState(
                     hit && scorePassportScan(hit) >= 16 && hit.passportName && hit.passportNo && hit.passportExpiry
@@ -190,6 +210,7 @@ export function GroupCollectForm({ campaign }: { campaign: GroupCampaign }) {
                         : "fail"
                   );
                 } catch {
+                  if (token !== uploadToken.current) return;
                   setScanState("fail");
                   setError("여권 사진을 다시 선택해 주세요.");
                 }
