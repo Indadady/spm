@@ -14,6 +14,7 @@ import {
   monthLabel,
   payoutWhen,
 } from "@/lib/recent";
+import { payoutOfficePath } from "@/lib/paths";
 import { useStore } from "@/lib/store";
 import { calcTax } from "@/lib/tax";
 import { usePayeeMap } from "@/lib/use-payee-inbox";
@@ -123,7 +124,7 @@ export default function ArchivePage() {
                 return (
                   <div key={p.id}>
                     <Link
-                      href={`/payouts/${p.id}`}
+                      href={payoutOfficePath(p.id)}
                       className="block rounded-2xl border bg-card px-4 py-3"
                     >
                       <div className="flex items-start justify-between gap-3">

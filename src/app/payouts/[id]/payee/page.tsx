@@ -2,6 +2,7 @@
 
 import { PayeeCard } from "@/components/payee-card";
 import { usePayout, useStore } from "@/lib/store";
+import { payoutOfficePath } from "@/lib/paths";
 import { usePayeeInbox } from "@/lib/use-payee-inbox";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -22,9 +23,9 @@ export default function PayeeAdminPage() {
 
   return (
     <div className="space-y-5">
-      <Link href={`/payouts/${payout.id}`} className="text-sm text-muted-foreground">
-        ← {payout.partnerName}
-      </Link>
+          <Link href={payoutOfficePath(payout.id)} className="text-sm text-muted-foreground">
+            ← {payout.partnerName}
+          </Link>
       <PayeeCard payout={payout} payee={inbox.payee} status={inbox.status} />
     </div>
   );

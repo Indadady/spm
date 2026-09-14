@@ -2,6 +2,7 @@
 
 import { PayoutSubnav } from "@/components/payout-subnav";
 import { SurveyForm } from "@/components/survey-form";
+import { payoutOfficePath } from "@/lib/paths";
 import { usePayout, useStore } from "@/lib/store";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -21,7 +22,7 @@ export default function SurveyPage() {
 
   return (
     <div className="space-y-5">
-      <Link href={`/payouts/${payout.id}`} className="text-sm text-muted-foreground">
+      <Link href={payoutOfficePath(payout.id)} className="text-sm text-muted-foreground">
         ← {payout.title}
       </Link>
       <div>

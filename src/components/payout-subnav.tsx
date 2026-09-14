@@ -1,19 +1,19 @@
 import { buttonVariants } from "@/components/ui/button";
+import { payoutOfficePath } from "@/lib/paths";
 import { cn } from "@/lib/utils";
 import type { Payout } from "@/lib/types";
 import Link from "next/link";
 
 export function PayoutSubnav({ payout }: { payout: Payout }) {
+  const open = payoutOfficePath(payout.id);
   const items = [
-    { href: `/payouts/${payout.id}`, label: "개요" },
-    ...(payout.side === "out"
-      ? [{ href: `/payouts/${payout.id}/payee`, label: "받은 자료" }]
-      : []),
+    { href: open, label: "개요" },
+    ...(payout.side === "out" ? [{ href: `${open}#payee`, label: "받은 자료" }] : []),
     ...(payout.contract || payout.needsContract
-      ? [{ href: `/payouts/${payout.id}/contract`, label: "계약" }]
+      ? [{ href: `/payouts/${payout.id}/contract/`, label: "계약" }]
       : []),
     ...(payout.side === "in" && payout.survey.length > 0
-      ? [{ href: `/payouts/${payout.id}/survey`, label: "참고 설문" }]
+      ? [{ href: `/payouts/${payout.id}/survey/`, label: "참고 설문" }]
       : []),
   ];
 
@@ -23,10 +23,7 @@ export function PayoutSubnav({ payout }: { payout: Payout }) {
         <Link
           key={item.href}
           href={item.href}
-          className={cn(
-            buttonVariants({ variant: "outline", size: "sm" }),
-            "shrink-0"
-          )}
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "shrink-0")}
         >
           {item.label}
         </Link>

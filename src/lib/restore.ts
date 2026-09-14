@@ -35,7 +35,9 @@ export function parseRestoreId(raw: string) {
     if (id) return id.trim();
     const parts = url.pathname.split("/").filter(Boolean);
     const payIdx = parts.lastIndexOf("payouts");
-    if (payIdx >= 0 && parts[payIdx + 1] && parts[payIdx + 1] !== "new") {
+    if (payIdx >= 0 && parts[payIdx + 1] === "open") {
+      /* /payouts/open/?id= 는 아래에서 searchParams로 처리 */
+    } else if (payIdx >= 0 && parts[payIdx + 1] && parts[payIdx + 1] !== "new") {
       return decodeURIComponent(parts[payIdx + 1]).trim();
     }
     const pIdx = parts.lastIndexOf("p");

@@ -6,6 +6,7 @@ import { wipePayoutRemote } from "@/lib/delete-payout";
 import { deletePayeeSubmissions } from "@/lib/payee-inbox";
 import { useStore } from "@/lib/store";
 import { taxMemoFor } from "@/lib/tax";
+import { payoutOfficePath } from "@/lib/paths";
 import { usePayeeMap } from "@/lib/use-payee-inbox";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -79,7 +80,7 @@ export default function LedgerPage() {
           {memos.map(({ p, memo, payee }) => (
             <li key={p.id} className="rounded-2xl border bg-card p-4">
               <div className="mb-2 flex items-center justify-between gap-2">
-                <Link href={`/payouts/${p.id}`} className="text-sm font-semibold underline">
+                <Link href={payoutOfficePath(p.id)} className="text-sm font-semibold underline">
                   {p.partnerName}
                 </Link>
                 <div className="flex shrink-0 flex-wrap justify-end gap-2">

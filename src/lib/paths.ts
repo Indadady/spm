@@ -13,6 +13,11 @@ export function absoluteUrl(path: string) {
   return `${window.location.origin}${withBase(path)}`;
 }
 
+/** GitHub Pages 정적보내기에서 /payouts/[동적id] 는 404라 쿼리로 엽니다. */
+export function payoutOfficePath(id: string) {
+  return `/payouts/open/?id=${encodeURIComponent(id)}`;
+}
+
 export const SEED_PAYOUT_IDS = [
   "out-tm-260903-kimryeon",
   "in-yeongseo-yeongdong",

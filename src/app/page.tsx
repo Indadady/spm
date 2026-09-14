@@ -8,6 +8,7 @@ import { formatPayDate, formatWon } from "@/lib/format";
 import { collectKindLabel, deleteCampaign } from "@/lib/group-collect";
 import { useGroupStore } from "@/lib/group-store";
 import { campaignWhen, payoutWhen, recentSlice } from "@/lib/recent";
+import { payoutOfficePath } from "@/lib/paths";
 import { useStore } from "@/lib/store";
 import { calcTax } from "@/lib/tax";
 import { usePayeeMap } from "@/lib/use-payee-inbox";
@@ -74,7 +75,7 @@ export default function HomePage() {
               return (
                 <li key={p.id}>
                   <Link
-                    href={`/payouts/${p.id}`}
+                    href={payoutOfficePath(p.id)}
                     className="block rounded-2xl border bg-card px-4 py-3"
                   >
                     <div className="flex items-start justify-between gap-3">

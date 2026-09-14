@@ -160,11 +160,14 @@ export function PayeeForm({ payout }: { payout: Payout }) {
             }),
             new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 90_000)),
           ]);
+          setDone(true);
         } catch {
-          /* 이 기기에는 이미 저장됨. 자료함 연결이 느려도 제출은 끝냅니다. */
+          setError(
+            "자료함으로 보내지 못했습니다. 네트워크를 확인한 뒤 다시 제출해 주세요. 이 기기에는 임시 저장돼 있습니다."
+          );
+        } finally {
+          setSending(false);
         }
-        setSending(false);
-        setDone(true);
       }}
     >
       <div className="space-y-1.5">

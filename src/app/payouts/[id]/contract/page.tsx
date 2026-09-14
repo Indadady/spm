@@ -4,6 +4,7 @@ import { PayoutSubnav } from "@/components/payout-subnav";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/format";
+import { payoutOfficePath } from "@/lib/paths";
 import { usePayout, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -26,7 +27,7 @@ export default function ContractPage() {
 
   return (
     <div className="space-y-5">
-      <Link href={`/payouts/${payout.id}`} className="text-sm text-muted-foreground">
+      <Link href={payoutOfficePath(payout.id)} className="text-sm text-muted-foreground">
         ← {payout.title}
       </Link>
       <h1 className="text-2xl font-bold">계약</h1>

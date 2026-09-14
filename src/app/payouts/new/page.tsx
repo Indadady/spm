@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { nextCompanyPayDateIso } from "@/lib/format";
+import { payoutOfficePath } from "@/lib/paths";
 import { publishPayoutMeta } from "@/lib/payout-meta";
 import { useStore } from "@/lib/store";
 import type { Payout } from "@/lib/types";
@@ -64,7 +65,7 @@ export default function NewPayoutPage() {
             setError("자료함 연결이 느립니다. 링크는 만들었으니 잠시 후 다시 열어 주세요.");
           }
           setSaving(false);
-          router.push(`/payouts/${id}`);
+          router.push(payoutOfficePath(id));
         }}
       >
         <div className="space-y-1.5">
