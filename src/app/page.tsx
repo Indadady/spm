@@ -10,16 +10,19 @@ import { useGroupStore } from "@/lib/group-store";
 import { campaignWhen, payoutWhen, recentSlice } from "@/lib/recent";
 import { useStore } from "@/lib/store";
 import { calcTax } from "@/lib/tax";
+import { usePayeeMap } from "@/lib/use-payee-inbox";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
 export default function HomePage() {
-  const { payouts, ready, payeeOf, removePayout } = useStore();
+  const { payouts, ready, removePayout } = useStore();
   const { campaigns, ready: groupReady, removeCampaign } = useGroupStore();
   const outgoing = payouts.filter((p) => p.side === "out");
   const payoutsShown = useMemo(() => recentSlice(outgoing, payoutWhen), [outgoing]);
   const campsShown = useMemo(() => recentSlice(campaigns, campaignWhen), [campaigns]);
+  const recentIds = useMemo(() => payoutsShown.recent.map((p) => p.id), [payoutsShown.recent]);
+  const payeeLive = usePayeeMap(recentIds);
   const [deletingId, setDeletingId] = useState("");
   const [error, setError] = useState("");
   const busy = Boolean(deletingId);
@@ -65,7 +68,7 @@ export default function HomePage() {
           <ul className="space-y-2">
             {payoutsShown.recent.map((p) => {
               const tax = calcTax({ method: p.taxMethod, gross: p.gross });
-              const payee = payeeOf(p.id);
+              const payee = payeeLive(p.id);
               const got = Boolean(payee?.name && payee?.bank && payee?.account);
               const key = `payout:${p.id}`;
               return (

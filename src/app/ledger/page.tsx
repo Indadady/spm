@@ -6,20 +6,23 @@ import { wipePayoutRemote } from "@/lib/delete-payout";
 import { deletePayeeSubmissions } from "@/lib/payee-inbox";
 import { useStore } from "@/lib/store";
 import { taxMemoFor } from "@/lib/tax";
+import { usePayeeMap } from "@/lib/use-payee-inbox";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 export default function LedgerPage() {
-  const { payouts, ready, payeeOf, removePayout, clearPayee } = useStore();
+  const { payouts, ready, removePayout, clearPayee } = useStore();
   const [deletingId, setDeletingId] = useState("");
   const [clearingPayeeId, setClearingPayeeId] = useState("");
   const [clearing, setClearing] = useState(false);
   const [error, setError] = useState("");
   const outgoing = payouts.filter((p) => p.side === "out");
+  const outgoingIds = useMemo(() => outgoing.map((p) => p.id), [outgoing]);
+  const payeeLive = usePayeeMap(outgoingIds);
   const memos = outgoing.map((p) => ({
     p,
-    memo: taxMemoFor(p, payeeOf(p.id)),
-    payee: payeeOf(p.id),
+    memo: taxMemoFor(p, payeeLive(p.id)),
+    payee: payeeLive(p.id),
   }));
   const all = memos.map((row) => row.memo).join("\n\n");
   const busy = Boolean(deletingId) || Boolean(clearingPayeeId) || clearing;

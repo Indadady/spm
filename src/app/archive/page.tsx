@@ -16,14 +16,17 @@ import {
 } from "@/lib/recent";
 import { useStore } from "@/lib/store";
 import { calcTax } from "@/lib/tax";
+import { usePayeeMap } from "@/lib/use-payee-inbox";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 export default function ArchivePage() {
-  const { payouts, ready, payeeOf, removePayout } = useStore();
+  const { payouts, ready, removePayout } = useStore();
   const { campaigns, ready: groupReady, removeCampaign } = useGroupStore();
   const outgoing = payouts.filter((p) => p.side === "out");
+  const outgoingIds = useMemo(() => outgoing.map((p) => p.id), [outgoing]);
+  const payeeLive = usePayeeMap(outgoingIds);
   const [deletingId, setDeletingId] = useState("");
   const [error, setError] = useState("");
   const busy = Boolean(deletingId);
@@ -114,7 +117,7 @@ export default function ArchivePage() {
               </h2>
               {block.payouts.map((p) => {
                 const tax = calcTax({ method: p.taxMethod, gross: p.gross });
-                const payee = payeeOf(p.id);
+                const payee = payeeLive(p.id);
                 const got = Boolean(payee?.name && payee?.bank && payee?.account);
                 const key = `payout:${p.id}`;
                 return (
