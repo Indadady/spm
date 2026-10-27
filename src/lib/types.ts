@@ -122,7 +122,7 @@ export type PayeeProfile = {
   signatureDataUrl?: string;
   privacyAgreed: boolean;
   submittedAt?: string;
-  source?: "firebase" | "local";
+  source?: "firebase" | "local" | "drive";
   remoteId?: string;
 };
 

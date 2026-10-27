@@ -155,6 +155,9 @@ export function payeeMissing(
   return miss;
 }
 
-export function payeeReady(p?: Parameters<typeof payeeMissing>[0]) {
+export function payeeReady(
+  p?: Parameters<typeof payeeMissing>[0] & { source?: string; submittedAt?: string }
+) {
+  if (p?.source === "drive" && p.submittedAt) return true;
   return payeeMissing(p).length === 0;
 }

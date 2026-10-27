@@ -1,10 +1,16 @@
 "use client";
 
-import { CopyButton } from "@/components/copy-button";
-import { DocImage } from "@/components/doc-image";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SPM_INBOX_FOLDER_URL, SPM_LEDGER_SHEET_URL } from "@/lib/drive-inbox";
 import type { InboxStatus } from "@/lib/payee-inbox";
+import { payeeReady } from "@/lib/payout-types";
 import type { PayeeProfile, Payout } from "@/lib/types";
+
+const statusText: Record<InboxStatus, string> = {
+  connecting: "드라이브 받은자료 폴더를 확인하는 중…",
+  live: "제출되면 구글 드라이브 받은자료 폴더에만 보관됩니다.",
+  local: "이 웹페이지에는 주민번호·계좌·신분증을 남기지 않습니다.",
+};
 
 export function PayeeCard({
   payout,
@@ -15,87 +21,40 @@ export function PayeeCard({
   payee?: PayeeProfile;
   status?: InboxStatus;
 }) {
-  const idSrc = payee?.idImageUrl || payee?.idImageDataUrl;
-  const passSrc = payee?.passportImageUrl || payee?.passportImageDataUrl;
-  const got = Boolean(payee?.name || payee?.bank || payee?.rrn);
+  const ready = payeeReady(payee);
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>받는 사람 정보</CardTitle>
         <p className="text-xs text-muted-foreground">
-          {got
-            ? "제출받은 자료입니다. 신분증 사진은 아래에서 확인할 수 있습니다."
-            : status === "connecting"
-              ? "자료함에 연결하는 중…"
+          {ready
+            ? "상대가 제출한 개인정보는 구글 드라이브 받은자료 폴더에 있습니다."
+            : status
+              ? statusText[status]
               : "링크를 보내 제출을 기다립니다."}
         </p>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
-        {!payee ? (
-          <p className="text-muted-foreground">
-            {payout.partnerName}에게 링크를 보내면 성명·주민등록번호·신분증·계좌가 여기에 모입니다.
+        {ready && payee ? (
+          <p className="leading-relaxed">
+            <span className="font-medium">{payee.name}</span> 님이 제출했습니다. 주민등록번호,
+            계좌, 신분증, 서명은 이 공개 웹페이지에 보이지 않습니다.
           </p>
         ) : (
-          <dl className="grid grid-cols-[7rem_1fr] gap-y-1.5">
-            <dt className="text-muted-foreground">이름</dt>
-            <dd className="font-medium">{payee.name}</dd>
-            <dt className="text-muted-foreground">주민등록번호</dt>
-            <dd className="flex flex-wrap items-center gap-2 font-medium tabular-nums">
-              <span>{payee.rrn || "—"}</span>
-              {payee.rrn ? <CopyButton text={payee.rrn} label="복사" /> : null}
-            </dd>
-            {payout.collectInsurance ? (
-              <>
-                <dt className="text-muted-foreground">여행자보험</dt>
-                <dd>{payee.rrn ? "주민번호 제출" : "미제출"}</dd>
-              </>
-            ) : null}
-            {payee.phone ? (
-              <>
-                <dt className="text-muted-foreground">휴대전화</dt>
-                <dd>{payee.phone}</dd>
-              </>
-            ) : null}
-            <dt className="text-muted-foreground">은행</dt>
-            <dd>{payee.bank}</dd>
-            <dt className="text-muted-foreground">계좌</dt>
-            <dd className="tabular-nums">{payee.account}</dd>
-            <dt className="text-muted-foreground">예금주</dt>
-            <dd>{payee.holder}</dd>
-            {payee.passportName ? (
-              <>
-                <dt className="text-muted-foreground">영문 성명</dt>
-                <dd>{payee.passportName}</dd>
-              </>
-            ) : null}
-            {payee.passportNo ? (
-              <>
-                <dt className="text-muted-foreground">여권번호</dt>
-                <dd className="tabular-nums">{payee.passportNo}</dd>
-              </>
-            ) : null}
-          </dl>
+          <p className="text-muted-foreground">
+            {payout.partnerName}에게 링크를 보내면 성명·주민등록번호·신분증·본인 계좌를 받아, 내
+            드라이브 <span className="font-medium">5.spm / 받은자료</span> 폴더에 넣습니다.
+          </p>
         )}
-        {payee?.signatureDataUrl ? (
-          <DocImage src={payee.signatureDataUrl} label="서명" download={false} />
-        ) : null}
-        {payee ? (
-          <DocImage
-            src={idSrc}
-            label="신분증 사본"
-            fileName={`${payee.name || payout.partnerName}-신분증.jpg`}
-            empty="신분증 사본이 아직 없습니다. 같은 링크를 다시 보내 사진을 받으면 여기에 보입니다."
-          />
-        ) : null}
-        {payout.collectPassport || passSrc ? (
-          <DocImage
-            src={passSrc}
-            label="여권사본"
-            fileName={`${payee?.name || payout.partnerName}-여권.jpg`}
-            empty="여권사본이 아직 없습니다."
-          />
-        ) : null}
+        <div className="flex flex-wrap gap-3 text-sm">
+          <a href={SPM_INBOX_FOLDER_URL} target="_blank" rel="noreferrer" className="underline">
+            받은자료 폴더 열기
+          </a>
+          <a href={SPM_LEDGER_SHEET_URL} target="_blank" rel="noreferrer" className="underline">
+            받은자료 대장 열기
+          </a>
+        </div>
       </CardContent>
     </Card>
   );

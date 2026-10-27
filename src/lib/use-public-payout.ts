@@ -2,7 +2,26 @@
 
 import { loadPayoutMeta, payoutFromMeta, type PayoutMeta } from "@/lib/payout-meta";
 import { usePayout, useStore } from "@/lib/store";
+import type { Payout } from "@/lib/types";
 import { useEffect, useState } from "react";
+
+function stubPayout(id: string): Payout {
+  return {
+    id,
+    typeId: "lecture",
+    side: "out",
+    title: "지급 자료",
+    partnerName: "스마트파트너",
+    partnerRole: "스마트파트너",
+    gross: 0,
+    taxMethod: "business-3-3",
+    dueDate: "",
+    status: "collecting",
+    docs: [],
+    evidence: [],
+    survey: [],
+  };
+}
 
 export function usePublicPayout(id: string) {
   const stored = usePayout(id);
@@ -32,10 +51,11 @@ export function usePublicPayout(id: string) {
     };
   }, [id]);
 
-  const payout = stored
-    ? { ...stored, collectInsurance: false, collectPassport: false }
-    : meta
-      ? { ...payoutFromMeta(meta), collectInsurance: false, collectPassport: false }
+  const found = stored ?? (meta ? payoutFromMeta(meta) : undefined);
+  const payout = found
+    ? { ...found, collectInsurance: false, collectPassport: false }
+    : ready && id
+      ? stubPayout(id)
       : undefined;
 
   return { payout, ready: ready && metaTried };

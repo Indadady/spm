@@ -107,6 +107,9 @@ async function blobFromSource(src: string | File, max: number, quality: number) 
 }
 
 const EMBED_LIMIT = 220_000;
+const DRIVE_MAX_EDGE = 1800;
+const DRIVE_QUALITY = 0.88;
+const DRIVE_MAX_BYTES = 1_400_000;
 
 /** 화면·Firestore 미리보기용. Storage 원본에는 쓰지 않습니다. */
 export async function fileToJpeg(file: File, max = 640, quality = 0.48): Promise<string> {
@@ -115,6 +118,13 @@ export async function fileToJpeg(file: File, max = 640, quality = 0.48): Promise
   jpeg = await canvasJpeg(await loadImage(jpeg), 480, 0.4);
   if (dataUrlBytes(jpeg) <= EMBED_LIMIT) return jpeg;
   return canvasJpeg(await loadImage(jpeg), 360, 0.35);
+}
+
+/** 드라이브 제출용. 신분증 글자가 읽히게 한 번만 줄입니다. */
+export async function fileToDriveJpeg(file: File): Promise<string> {
+  const jpeg = await canvasFromSource(file, DRIVE_MAX_EDGE, DRIVE_QUALITY);
+  if (dataUrlBytes(jpeg) <= DRIVE_MAX_BYTES) return jpeg;
+  return canvasFromSource(file, 1400, 0.84);
 }
 
 function jpegFileName(fileName: string) {

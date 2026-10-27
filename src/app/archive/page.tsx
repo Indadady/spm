@@ -2,6 +2,7 @@
 
 import { CopyLink } from "@/components/copy-link";
 import { GroupCopyLink } from "@/components/group-copy-link";
+import { PageHeader } from "@/components/page-header";
 import { RestorePanel } from "@/components/restore-panel";
 import { Button } from "@/components/ui/button";
 import { wipePayoutRemote } from "@/lib/delete-payout";
@@ -72,12 +73,11 @@ export default function ArchivePage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold">보관함</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          홈에는 최근 자료만 둡니다. 지난 지급·여행자 링크는 연도·월별로 모아 둡니다.
-        </p>
-      </div>
+      <PageHeader
+        kicker="ARCHIVE"
+        title="보관함"
+        description="홈에는 최근 자료만 둡니다. 지난 지급·여행자 링크는 연도·월별로 모아 둡니다."
+      />
 
       <RestorePanel />
 

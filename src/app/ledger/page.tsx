@@ -1,6 +1,7 @@
 "use client";
 
 import { CopyButton } from "@/components/copy-button";
+import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { wipePayoutRemote } from "@/lib/delete-payout";
 import { deletePayeeSubmissions } from "@/lib/payee-inbox";
@@ -35,41 +36,40 @@ export default function LedgerPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">세무 자료</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            세무 담당자에게 보낼 글입니다. 계좌가 비어 있으면 아직 자료를 받지 못한 건입니다.
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-wrap justify-end gap-2">
-          {all ? <CopyButton text={all} label="전체 복사" /> : null}
-          {memos.length > 0 ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="destructive"
-              disabled={busy}
-              onClick={async () => {
-                if (!window.confirm("세무 자료를 모두 삭제할까요? 되돌릴 수 없습니다.")) return;
-                setClearing(true);
-                setError("");
-                try {
-                  for (const { p } of memos) {
-                    await wipeOne(p.id);
+      <PageHeader
+        kicker="TAX"
+        title="세무 자료"
+        description="세무 담당자에게 보낼 글입니다. 상세 개인정보는 드라이브 받은자료 폴더에서 봅니다."
+        actions={
+          <>
+            {all ? <CopyButton text={all} label="전체 복사" /> : null}
+            {memos.length > 0 ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                disabled={busy}
+                onClick={async () => {
+                  if (!window.confirm("세무 자료를 모두 삭제할까요? 되돌릴 수 없습니다.")) return;
+                  setClearing(true);
+                  setError("");
+                  try {
+                    for (const { p } of memos) {
+                      await wipeOne(p.id);
+                    }
+                  } catch {
+                    setError("지우지 못했습니다. 연결을 확인하고 다시 시도해 주세요.");
+                  } finally {
+                    setClearing(false);
                   }
-                } catch {
-                  setError("지우지 못했습니다. 연결을 확인하고 다시 시도해 주세요.");
-                } finally {
-                  setClearing(false);
-                }
-              }}
-            >
-              {clearing ? "지우는 중…" : "전체 삭제"}
-            </Button>
-          ) : null}
-        </div>
-      </div>
+                }}
+              >
+                {clearing ? "지우는 중…" : "전체 삭제"}
+              </Button>
+            ) : null}
+          </>
+        }
+      />
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       {!ready ? (
         <p className="text-sm text-muted-foreground">불러오는 중…</p>

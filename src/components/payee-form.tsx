@@ -4,8 +4,8 @@ import { SignPad } from "@/components/sign-pad";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { fileForDownload, fileToJpeg } from "@/lib/image-file";
-import { submitPayee } from "@/lib/payee-inbox";
+import { fileToDriveJpeg } from "@/lib/image-file";
+import { driveReceipt, submitPayee } from "@/lib/payee-inbox";
 import { payeeMissing } from "@/lib/payout-types";
 import { useStore } from "@/lib/store";
 import type { Payout } from "@/lib/types";
@@ -26,7 +26,7 @@ function PhotoPick({
   hint: string;
   value: string;
   fileName: string;
-  /** preview는 화면용 축소본, original은 Storage 업로드용(이미 축소된) 파일 */
+  /** value는 드라이브에 넣을 JPEG. 선택 때 한 번만 맞춥니다. */
   onChange: (preview: string, fileName: string, original: File) => void;
 }) {
   const [error, setError] = useState("");
@@ -49,8 +49,7 @@ function PhotoPick({
             const file = e.target.files?.[0];
             if (!file) return;
             try {
-              const stored = await fileForDownload(file).catch(() => file);
-              onChange(await fileToJpeg(stored), file.name, stored);
+              onChange(await fileToDriveJpeg(file), file.name, file);
               setError("");
             } catch {
               setError("사진을 다시 선택해 주세요.");
@@ -117,7 +116,7 @@ export function PayeeForm({ payout }: { payout: Payout }) {
   if (done) {
     return (
       <p className="rounded-xl bg-accent/70 px-4 py-6 text-center text-sm font-medium">
-        제출했습니다. 투어메이커로 전달됩니다.
+        제출했습니다. 개인정보는 투어메이커 구글 드라이브 받은자료 폴더에만 보관됩니다.
       </p>
     );
   }
@@ -151,20 +150,15 @@ export function PayeeForm({ payout }: { payout: Payout }) {
         }
         setSending(true);
         setError("");
-        savePayee(payout.id, profile);
         try {
           await Promise.race([
-            submitPayee(payout, profile, {
-              idFile: idFile.current ?? undefined,
-              passportFile: wantPass ? passportFile.current ?? undefined : undefined,
-            }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 90_000)),
+            submitPayee(payout, profile),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 8_000)),
           ]);
+          savePayee(payout.id, driveReceipt(profile.name));
           setDone(true);
         } catch {
-          setError(
-            "자료함으로 보내지 못했습니다. 네트워크를 확인한 뒤 다시 제출해 주세요. 이 기기에는 임시 저장돼 있습니다."
-          );
+          setError("보내지 못했습니다. 잠시 후 다시 제출해 주세요.");
         } finally {
           setSending(false);
         }
