@@ -153,6 +153,9 @@ export function PayeeForm({ payout }: { payout: Payout }) {
         }
         setSending(true);
         setError("");
+        await new Promise<void>((resolve) => {
+          window.requestAnimationFrame(() => window.setTimeout(resolve, 40));
+        });
         try {
           const saved = await submitPayee(payout, profile, {
             idFile: idFile.current || undefined,

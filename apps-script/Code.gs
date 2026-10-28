@@ -51,9 +51,9 @@ function doPost(e) {
     }
 
     appendLedger_(data, dest.getUrl());
-    return json_({ ok: true, url: dest.getUrl() });
+    return json_({ ok: true, status: "success", url: dest.getUrl() });
   } catch (err) {
-    return json_({ ok: false, error: String(err) });
+    return json_({ ok: false, status: "error", error: String(err) });
   }
 }
 

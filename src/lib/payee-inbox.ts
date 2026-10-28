@@ -266,13 +266,16 @@ export async function submitPayee(
 ) {
   // 카카오톡은 앱스스크립트(script.google.com) 전송을 막는 경우가 많아
   // 예전에 되던 Firebase를 먼저 쓰고, 드라이브는 같이 시도만 합니다.
-  const drive = submitPayeeToDrive(payout, profile).catch(() => undefined);
+  const drive = submitPayeeToDrive(payout, profile).catch(() => ({ confirmed: false }));
   try {
     const saved = await submitPayeeToFirebase(payout, profile, originals);
     void drive;
     return saved;
   } catch (err) {
-    await drive;
+    const sent = await drive;
+    if (sent.confirmed) {
+      return { remoteId: undefined, idImageUrl: undefined, passportImageUrl: undefined };
+    }
     throw err;
   }
 }

@@ -68,25 +68,54 @@ function postDriveViaIframe(body: string): Promise<void> {
   });
 }
 
+export type DriveSendResult = { confirmed: boolean };
+
 /**
- * 카카오톡 인앱은 script.google.com fetch가 바로 실패하는 경우가 많습니다.
- * fetch와 hidden form을 같이 보내고, 전송을 걸었다면 성공으로 봅니다.
+ * text/plain 본문은 CORS preflight를 피합니다.
+ * 앱스스크립트가 CORS 헤더를 주면 JSON(ok/status)을 읽고, 못 읽으면 no-cors·iframe으로 보냅니다.
+ * no-cors 불투명 응답(ok:false, status:0)은 실패로 보지 않습니다.
  */
-async function postDrivePayload(body: string): Promise<void> {
-  const viaFetch = fetch(DRIVE_WEBAPP_URL, {
+async function postDriveCors(body: string): Promise<boolean> {
+  const res = await fetch(DRIVE_WEBAPP_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body,
+  });
+  if (res.type === "opaque") return false;
+  let json: { ok?: boolean; status?: string } | null = null;
+  try {
+    json = (await res.json()) as { ok?: boolean; status?: string };
+  } catch {
+    json = null;
+  }
+  if (json?.ok === false || json?.status === "error") return false;
+  return Boolean(json?.ok || json?.status === "success" || res.ok);
+}
+
+async function postDriveNoCors(body: string) {
+  await fetch(DRIVE_WEBAPP_URL, {
     method: "POST",
     mode: "no-cors",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
     body,
     keepalive: true,
-  }).then((res) => {
-    if (res.type !== "opaque" && !res.ok) throw new Error("DRIVE_WEBAPP_FAILED");
   });
-
-  await Promise.allSettled([viaFetch, postDriveViaIframe(body)]);
 }
 
-export async function submitPayeeToDrive(payout: Payout, profile: PayeeProfile) {
+async function postDrivePayload(body: string): Promise<DriveSendResult> {
+  try {
+    if (await postDriveCors(body)) return { confirmed: true };
+  } catch {
+    /* 카카오톡·CORS */
+  }
+  await Promise.allSettled([postDriveNoCors(body), postDriveViaIframe(body)]);
+  return { confirmed: false };
+}
+
+export async function submitPayeeToDrive(
+  payout: Payout,
+  profile: PayeeProfile
+): Promise<DriveSendResult> {
   if (!DRIVE_WEBAPP_URL) {
     throw new Error("DRIVE_WEBAPP_NOT_CONFIGURED");
   }
@@ -113,5 +142,5 @@ export async function submitPayeeToDrive(payout: Payout, profile: PayeeProfile) 
     passportImageDataUrl: profile.passportImageDataUrl ?? "",
   };
 
-  await postDrivePayload(JSON.stringify(payload));
+  return postDrivePayload(JSON.stringify(payload));
 }
