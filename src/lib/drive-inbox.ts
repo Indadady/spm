@@ -32,37 +32,22 @@ export function driveReceipt(name: string): PayeeProfile {
 }
 
 /**
- * 앱스스크립트는 CORS를 안 주므로 응답을 읽을 수 없습니다.
- * 본문 업로드가 끝나면(upload.onload) 전달된 것으로 보고 바로 성공 처리합니다.
- * 스크립트 폴더 저장은 서버에서 이어서 진행됩니다.
+ * 앱스스크립트 웹앱은 CORS 헤더가 없어 XHR이 바로 실패합니다(카카오톡 인앱 포함).
+ * fetch + mode:'no-cors' + text/plain 만 브라우저에서 안정적으로 전달됩니다.
+ * opaque 응답이라 본문은 못 읽지만, 네트워크 전송이 끝나면 성공으로 봅니다.
  */
-function postDrivePayload(body: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    let settled = false;
-    const finish = (ok: boolean, err?: Error) => {
-      if (settled) return;
-      settled = true;
-      if (ok) resolve();
-      else reject(err ?? new Error("DRIVE_WEBAPP_FAILED"));
-    };
-
-    xhr.upload.onload = () => finish(true);
-    xhr.upload.onerror = () => finish(false, new Error("DRIVE_WEBAPP_UPLOAD"));
-    xhr.onerror = () => {
-      // CORS로 응답을 못 읽어도 업로드는 끝난 경우가 많습니다.
-      if (!settled) finish(true);
-    };
-    xhr.ontimeout = () => finish(false, new Error("DRIVE_WEBAPP_TIMEOUT"));
-    xhr.open("POST", DRIVE_WEBAPP_URL);
-    xhr.setRequestHeader("Content-Type", "text/plain;charset=utf-8");
-    xhr.timeout = 45_000;
-    try {
-      xhr.send(body);
-    } catch (err) {
-      finish(false, err instanceof Error ? err : new Error("DRIVE_WEBAPP_FAILED"));
-    }
+async function postDrivePayload(body: string): Promise<void> {
+  const res = await fetch(DRIVE_WEBAPP_URL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body,
+    keepalive: true,
   });
+  // no-cors 성공 시 type === 'opaque'. 그 외(드묾)만 실패로 봅니다.
+  if (res.type !== "opaque" && !res.ok) {
+    throw new Error("DRIVE_WEBAPP_FAILED");
+  }
 }
 
 export async function submitPayeeToDrive(payout: Payout, profile: PayeeProfile) {

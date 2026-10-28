@@ -154,9 +154,10 @@ export function PayeeForm({ payout }: { payout: Payout }) {
         setSending(true);
         setError("");
         try {
+          // no-cors 전송은 사진 포함 시 수 초~십수 초 걸릴 수 있어 여유 있게 둡니다.
           await Promise.race([
             submitPayee(payout, profile),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 20_000)),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 60_000)),
           ]);
           savePayee(payout.id, driveReceipt(profile.name));
           setDone(true);
