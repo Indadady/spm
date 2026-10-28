@@ -107,10 +107,10 @@ async function blobFromSource(src: string | File, max: number, quality: number) 
 }
 
 const EMBED_LIMIT = 220_000;
-/** 드라이브 제출: 글자 판독 + 2~3초 전송을 맞추기 위해 용량을 낮춥니다. */
-const DRIVE_MAX_EDGE = 1280;
-const DRIVE_QUALITY = 0.72;
-const DRIVE_MAX_BYTES = 420_000;
+/** 드라이브 제출: 주민번호·주소가 읽히게 화질을 유지하고, 너무 큰 원본만 줄입니다. */
+const DRIVE_MAX_EDGE = 1600;
+const DRIVE_QUALITY = 0.85;
+const DRIVE_MAX_BYTES = 900_000;
 
 /** 화면·Firestore 미리보기용. Storage 원본에는 쓰지 않습니다. */
 export async function fileToJpeg(file: File, max = 640, quality = 0.48): Promise<string> {
@@ -125,9 +125,9 @@ export async function fileToJpeg(file: File, max = 640, quality = 0.48): Promise
 export async function fileToDriveJpeg(file: File): Promise<string> {
   let jpeg = await canvasFromSource(file, DRIVE_MAX_EDGE, DRIVE_QUALITY);
   if (dataUrlBytes(jpeg) <= DRIVE_MAX_BYTES) return jpeg;
-  jpeg = await canvasFromSource(file, 1024, 0.64);
+  jpeg = await canvasFromSource(file, 1400, 0.8);
   if (dataUrlBytes(jpeg) <= DRIVE_MAX_BYTES) return jpeg;
-  return canvasFromSource(file, 860, 0.55);
+  return canvasFromSource(file, 1200, 0.72);
 }
 
 function jpegFileName(fileName: string) {
