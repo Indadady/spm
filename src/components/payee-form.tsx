@@ -160,8 +160,8 @@ export function PayeeForm({ payout }: { payout: Payout }) {
           });
           savePayee(payout.id, {
             ...profile,
-            idImageUrl: saved.idImageUrl || profile.idImageUrl,
-            passportImageUrl: saved.passportImageUrl || profile.passportImageUrl,
+            idImageUrl: saved.idImageUrl,
+            passportImageUrl: saved.passportImageUrl,
             remoteId: saved.remoteId,
             source: "firebase",
           });
