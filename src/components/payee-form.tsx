@@ -83,7 +83,7 @@ function agreeText(payout: Payout) {
   const bits = ["입금 처리"];
   if (payout.collectInsurance) bits.push("여행자보험 가입");
   if (payout.collectPassport) bits.push("여행자 명단(여권사본)");
-  return `${bits.join("·")}을 위해 위 정보 수집에 동의합니다.`;
+  return `${bits.join("·")}를 위해 위 정보 수집에 동의합니다.`;
 }
 
 export function PayeeForm({ payout }: { payout: Payout }) {
@@ -115,9 +115,12 @@ export function PayeeForm({ payout }: { payout: Payout }) {
 
   if (done) {
     return (
-      <p className="rounded-xl bg-accent/70 px-4 py-6 text-center text-sm font-medium">
-        제출했습니다. 개인정보는 투어메이커 구글 드라이브 받은자료 폴더에만 보관됩니다.
-      </p>
+      <div className="rounded-xl bg-accent/70 px-4 py-8 text-center">
+        <p className="text-base font-semibold text-[color:var(--navy)]">제출되었습니다.</p>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          개인정보는 투어메이커 구글 드라이브 받은자료 폴더에만 보관됩니다.
+        </p>
+      </div>
     );
   }
 
@@ -153,7 +156,7 @@ export function PayeeForm({ payout }: { payout: Payout }) {
         try {
           await Promise.race([
             submitPayee(payout, profile),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 8_000)),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 20_000)),
           ]);
           savePayee(payout.id, driveReceipt(profile.name));
           setDone(true);
