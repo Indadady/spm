@@ -1,7 +1,7 @@
-import { addDoc, deleteDoc, getDocs, onSnapshot, query, type Unsubscribe } from "firebase/firestore";
-import { getDownloadURL, listAll, ref, uploadBytes, uploadString } from "firebase/storage";
+import { addDoc, deleteDoc, doc, getDocs, onSnapshot, query, updateDoc, type Unsubscribe } from "firebase/firestore";
+import { getDownloadURL, listAll, ref, uploadString } from "firebase/storage";
 import { submitPayeeToDrive } from "./drive-inbox";
-import { dataUrlBytes, fileForDownload, fileForStorageFallback, shrinkDataUrl } from "./image-file";
+import { dataUrlBytes, shrinkDataUrl } from "./image-file";
 import { ensureAnonAuth, getFirebase, payeeResponsesCol, SURVEY_APP_ID } from "./firebase";
 import type { PayeeProfile, Payout } from "./types";
 
@@ -32,6 +32,7 @@ function safeFileName(name: string, fallback: string) {
 
 async function compactImage(dataUrl?: string) {
   if (!dataUrl) return "";
+  if (dataUrlBytes(dataUrl) <= EMBED_LIMIT) return dataUrl;
   const steps: [number, number][] = [
     [800, 0.52],
     [560, 0.42],
@@ -45,7 +46,7 @@ async function compactImage(dataUrl?: string) {
       /* 다음 크기로 */
     }
   }
-  return dataUrlBytes(dataUrl) <= EMBED_LIMIT ? dataUrl : "";
+  return "";
 }
 
 async function uploadDataUrl(payoutId: string, dataUrl: string, fileName: string) {
@@ -59,29 +60,6 @@ async function uploadDataUrl(payoutId: string, dataUrl: string, fileName: string
       customMetadata: { originalName: fileName },
     }),
     20_000,
-    "upload"
-  );
-  return withTimeout(getDownloadURL(fileRef), 8_000, "url");
-}
-
-async function uploadOriginalFile(payoutId: string, file: File, kind: "id" | "passport") {
-  const { storage } = getFirebase();
-  if (!storage) return undefined;
-  let stored: File;
-  try {
-    stored = await fileForDownload(file);
-  } catch {
-    stored = await fileForStorageFallback(file);
-  }
-  const ext = (stored.name.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "").slice(0, 5) || "jpg";
-  const path = `artifacts/${SURVEY_APP_ID}/public/spm/${payoutId}/${Date.now()}-${kind}.${ext}`;
-  const fileRef = ref(storage, path);
-  await withTimeout(
-    uploadBytes(fileRef, stored, {
-      contentType: stored.type || "image/jpeg",
-      customMetadata: { originalName: file.name },
-    }),
-    60_000,
     "upload"
   );
   return withTimeout(getDownloadURL(fileRef), 8_000, "url");
@@ -156,63 +134,54 @@ async function fillMissingImages(payoutId: string, rows: PayeeProfile[]) {
   }
 }
 
-async function submitPayeeToFirebase(
+function finishUploadsInBackground(
   payout: Payout,
   profile: PayeeProfile,
-  originals?: { idFile?: File; passportFile?: File }
+  remoteId: string
 ) {
-  await withTimeout(ensureAnonAuth(), 8_000, "auth");
-  const idEmbed = await compactImage(profile.idImageDataUrl);
-  const passportEmbed = await compactImage(profile.passportImageDataUrl);
-  let idImageUrl = profile.idImageUrl ?? "";
-  let passportImageUrl = profile.passportImageUrl ?? "";
-  let signatureDataUrl = profile.signatureDataUrl ?? "";
+  void (async () => {
+    try {
+      const [idImageUrl, passportImageUrl, signUrl] = await Promise.all([
+        profile.idImageDataUrl
+          ? uploadDataUrl(payout.id, profile.idImageDataUrl, profile.idFileName ?? "id.jpg").catch(
+              () => ""
+            )
+          : Promise.resolve(""),
+        profile.passportImageDataUrl
+          ? uploadDataUrl(
+              payout.id,
+              profile.passportImageDataUrl,
+              profile.passportFileName ?? "passport.jpg"
+            ).catch(() => "")
+          : Promise.resolve(""),
+        profile.signatureDataUrl && dataUrlBytes(profile.signatureDataUrl) > 180_000
+          ? uploadDataUrl(payout.id, profile.signatureDataUrl, "sign.jpg").catch(() => "")
+          : Promise.resolve(""),
+      ]);
+      const patch: Record<string, string> = {};
+      if (idImageUrl) patch.idImageUrl = idImageUrl;
+      if (passportImageUrl) patch.passportImageUrl = passportImageUrl;
+      if (signUrl) patch.signatureDataUrl = signUrl;
+      if (Object.keys(patch).length) {
+        await updateDoc(doc(payeeResponsesCol(payout.id), remoteId), patch);
+      }
+    } catch {
+      /* 미리보기는 이미 저장됨 */
+    }
+  })();
+  void submitPayeeToDrive(payout, profile).catch(() => undefined);
+}
 
-  if (originals?.idFile) {
-    try {
-      idImageUrl = (await uploadOriginalFile(payout.id, originals.idFile, "id")) ?? "";
-    } catch {
-      idImageUrl = "";
-    }
-  }
-  if (!idImageUrl && profile.idImageDataUrl) {
-    try {
-      idImageUrl =
-        (await uploadDataUrl(payout.id, profile.idImageDataUrl, profile.idFileName ?? "id.jpg")) ?? "";
-    } catch {
-      idImageUrl = idImageUrl || "";
-    }
-  }
-
-  if (originals?.passportFile) {
-    try {
-      passportImageUrl =
-        (await uploadOriginalFile(payout.id, originals.passportFile, "passport")) ?? "";
-    } catch {
-      passportImageUrl = "";
-    }
-  }
-  if (!passportImageUrl && profile.passportImageDataUrl) {
-    try {
-      passportImageUrl =
-        (await uploadDataUrl(
-          payout.id,
-          profile.passportImageDataUrl,
-          profile.passportFileName ?? "passport.jpg"
-        )) ?? "";
-    } catch {
-      passportImageUrl = passportImageUrl || "";
-    }
-  }
-
-  if (signatureDataUrl && dataUrlBytes(signatureDataUrl) > 180_000) {
-    try {
-      const uploaded = await uploadDataUrl(payout.id, signatureDataUrl, "sign.jpg");
-      signatureDataUrl = uploaded ?? signatureDataUrl;
-    } catch {
-      /* 서명은 문서에 그대로 */
-    }
-  }
+async function submitPayeeToFirebase(payout: Payout, profile: PayeeProfile) {
+  await withTimeout(ensureAnonAuth(), 6_000, "auth");
+  const [idEmbed, passportEmbed] = await Promise.all([
+    compactImage(profile.idImageDataUrl),
+    compactImage(profile.passportImageDataUrl),
+  ]);
+  const signatureDataUrl =
+    profile.signatureDataUrl && dataUrlBytes(profile.signatureDataUrl) > 180_000
+      ? ""
+      : (profile.signatureDataUrl ?? "");
 
   const payload = {
     kind: "spm-payee",
@@ -231,12 +200,12 @@ async function submitPayeeToFirebase(
     holder: profile.holder,
     privacyAgreed: profile.privacyAgreed,
     idFileName: profile.idFileName ?? "",
-    idImageUrl,
+    idImageUrl: profile.idImageUrl ?? "",
     idImageDataUrl: idEmbed,
     passportName: profile.passportName ?? "",
     passportNo: profile.passportNo ?? "",
     passportFileName: profile.passportFileName ?? "",
-    passportImageUrl,
+    passportImageUrl: profile.passportImageUrl ?? "",
     passportImageDataUrl: passportEmbed,
     signatureDataUrl,
     partnerPhone: profile.phone ?? "",
@@ -247,37 +216,27 @@ async function submitPayeeToFirebase(
 
   try {
     const docRef = await withTimeout(addDoc(payeeResponsesCol(payout.id), payload), 8_000, "save");
-    return { remoteId: docRef.id, idImageUrl, passportImageUrl };
+    return { remoteId: docRef.id, idImageUrl: "", passportImageUrl: "" };
   } catch {
     const slim = {
       ...payload,
-      idImageDataUrl: idImageUrl ? "" : payload.idImageDataUrl,
-      passportImageDataUrl: passportImageUrl ? "" : payload.passportImageDataUrl,
+      idImageDataUrl: "",
+      passportImageDataUrl: "",
     };
     const docRef = await withTimeout(addDoc(payeeResponsesCol(payout.id), slim), 8_000, "save");
-    return { remoteId: docRef.id, idImageUrl, passportImageUrl };
+    return { remoteId: docRef.id, idImageUrl: "", passportImageUrl: "" };
   }
 }
 
 export async function submitPayee(
   payout: Payout,
   profile: PayeeProfile,
-  originals?: { idFile?: File; passportFile?: File }
+  _originals?: { idFile?: File; passportFile?: File }
 ) {
-  // 카카오톡은 앱스스크립트(script.google.com) 전송을 막는 경우가 많아
-  // 예전에 되던 Firebase를 먼저 쓰고, 드라이브는 같이 시도만 합니다.
-  const drive = submitPayeeToDrive(payout, profile).catch(() => ({ confirmed: false }));
-  try {
-    const saved = await submitPayeeToFirebase(payout, profile, originals);
-    void drive;
-    return saved;
-  } catch (err) {
-    const sent = await drive;
-    if (sent.confirmed) {
-      return { remoteId: undefined, idImageUrl: undefined, passportImageUrl: undefined };
-    }
-    throw err;
-  }
+  const saved = await submitPayeeToFirebase(payout, profile);
+  if (saved.remoteId) finishUploadsInBackground(payout, profile, saved.remoteId);
+  else void submitPayeeToDrive(payout, profile).catch(() => undefined);
+  return saved;
 }
 
 export function subscribePayees(

@@ -4,6 +4,7 @@ import { SignPad } from "@/components/sign-pad";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ensureAnonAuth } from "@/lib/firebase";
 import { fileToDriveJpeg } from "@/lib/image-file";
 import { submitPayee } from "@/lib/payee-inbox";
 import { payeeMissing } from "@/lib/payout-types";
@@ -11,7 +12,7 @@ import { useStore } from "@/lib/store";
 import type { Payout } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ImagePlus } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 function PhotoPick({
   id,
@@ -112,6 +113,10 @@ export function PayeeForm({ payout }: { payout: Payout }) {
   const [sending, setSending] = useState(false);
   const idFile = useRef<File | null>(null);
   const passportFile = useRef<File | null>(null);
+
+  useEffect(() => {
+    void ensureAnonAuth().catch(() => undefined);
+  }, []);
 
   if (done) {
     return (
