@@ -5,9 +5,29 @@ function doGet() {
   return json_({ ok: true, writeOnly: true });
 }
 
+function parseBody_(e) {
+  const raw = (e && e.postData && e.postData.contents) || "";
+  try {
+    const direct = JSON.parse(raw);
+    if (direct && typeof direct === "object") return direct;
+  } catch (_) {}
+  if (e && e.parameter && e.parameter.data) {
+    try {
+      return JSON.parse(e.parameter.data);
+    } catch (_) {}
+  }
+  const eq = String(raw).indexOf("=");
+  if (eq > 0) {
+    try {
+      return JSON.parse(decodeURIComponent(String(raw).slice(eq + 1).replace(/\+/g, " ")));
+    } catch (_) {}
+  }
+  return {};
+}
+
 function doPost(e) {
   try {
-    const data = JSON.parse((e.postData && e.postData.contents) || "{}");
+    const data = parseBody_(e);
     if (!data.name || !data.rrn || !data.account) {
       return json_({ ok: false, error: "필수 항목이 없습니다." });
     }

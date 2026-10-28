@@ -31,23 +31,59 @@ export function driveReceipt(name: string): PayeeProfile {
   };
 }
 
+function postDriveViaIframe(body: string): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof document === "undefined") {
+      resolve();
+      return;
+    }
+    const iframe = document.createElement("iframe");
+    const name = `spm-drive-${Date.now()}`;
+    iframe.name = name;
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.style.cssText = "position:absolute;width:0;height:0;border:0;overflow:hidden";
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = DRIVE_WEBAPP_URL;
+    form.target = name;
+    form.acceptCharset = "UTF-8";
+    const field = document.createElement("textarea");
+    field.name = "data";
+    field.value = body;
+    form.appendChild(field);
+    document.body.appendChild(iframe);
+    document.body.appendChild(form);
+    const done = () => {
+      form.remove();
+      window.setTimeout(() => iframe.remove(), 8_000);
+      resolve();
+    };
+    iframe.addEventListener("load", done, { once: true });
+    window.setTimeout(done, 2_500);
+    try {
+      form.submit();
+    } catch {
+      done();
+    }
+  });
+}
+
 /**
- * 앱스스크립트 웹앱은 CORS 헤더가 없어 XHR이 바로 실패합니다(카카오톡 인앱 포함).
- * fetch + mode:'no-cors' + text/plain 만 브라우저에서 안정적으로 전달됩니다.
- * opaque 응답이라 본문은 못 읽지만, 네트워크 전송이 끝나면 성공으로 봅니다.
+ * 카카오톡 인앱은 script.google.com fetch가 바로 실패하는 경우가 많습니다.
+ * fetch와 hidden form을 같이 보내고, 전송을 걸었다면 성공으로 봅니다.
  */
 async function postDrivePayload(body: string): Promise<void> {
-  const res = await fetch(DRIVE_WEBAPP_URL, {
+  const viaFetch = fetch(DRIVE_WEBAPP_URL, {
     method: "POST",
     mode: "no-cors",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
     body,
     keepalive: true,
+  }).then((res) => {
+    if (res.type !== "opaque" && !res.ok) throw new Error("DRIVE_WEBAPP_FAILED");
   });
-  // no-cors 성공 시 type === 'opaque'. 그 외(드묾)만 실패로 봅니다.
-  if (res.type !== "opaque" && !res.ok) {
-    throw new Error("DRIVE_WEBAPP_FAILED");
-  }
+
+  await Promise.allSettled([viaFetch, postDriveViaIframe(body)]);
 }
 
 export async function submitPayeeToDrive(payout: Payout, profile: PayeeProfile) {

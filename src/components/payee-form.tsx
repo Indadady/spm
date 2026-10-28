@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { fileToDriveJpeg } from "@/lib/image-file";
-import { driveReceipt, submitPayee } from "@/lib/payee-inbox";
+import { submitPayee } from "@/lib/payee-inbox";
 import { payeeMissing } from "@/lib/payout-types";
 import { useStore } from "@/lib/store";
 import type { Payout } from "@/lib/types";
@@ -118,7 +118,7 @@ export function PayeeForm({ payout }: { payout: Payout }) {
       <div className="rounded-xl bg-accent/70 px-4 py-8 text-center">
         <p className="text-base font-semibold text-[color:var(--navy)]">제출되었습니다.</p>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          개인정보는 투어메이커 구글 드라이브 받은자료 폴더에만 보관됩니다.
+          투어메이커로 전달되었습니다.
         </p>
       </div>
     );
@@ -154,12 +154,17 @@ export function PayeeForm({ payout }: { payout: Payout }) {
         setSending(true);
         setError("");
         try {
-          // no-cors 전송은 사진 포함 시 수 초~십수 초 걸릴 수 있어 여유 있게 둡니다.
-          await Promise.race([
-            submitPayee(payout, profile),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 60_000)),
-          ]);
-          savePayee(payout.id, driveReceipt(profile.name));
+          const saved = await submitPayee(payout, profile, {
+            idFile: idFile.current || undefined,
+            passportFile: passportFile.current || undefined,
+          });
+          savePayee(payout.id, {
+            ...profile,
+            idImageUrl: saved.idImageUrl || profile.idImageUrl,
+            passportImageUrl: saved.passportImageUrl || profile.passportImageUrl,
+            remoteId: saved.remoteId,
+            source: "firebase",
+          });
           setDone(true);
         } catch {
           setError("보내지 못했습니다. 잠시 후 다시 제출해 주세요.");
