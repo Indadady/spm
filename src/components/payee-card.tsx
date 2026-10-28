@@ -4,6 +4,7 @@ import { CopyButton } from "@/components/copy-button";
 import { DocImage } from "@/components/doc-image";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SPM_INBOX_FOLDER_URL, SPM_LEDGER_SHEET_URL } from "@/lib/drive-inbox";
+import { formatAccount, formatPhone, formatRrnInput } from "@/lib/format";
 import type { InboxStatus } from "@/lib/payee-inbox";
 import type { PayeeProfile, Payout } from "@/lib/types";
 
@@ -43,8 +44,8 @@ export function PayeeCard({
             <dd className="font-medium">{payee.name}</dd>
             <dt className="text-muted-foreground">주민등록번호</dt>
             <dd className="flex flex-wrap items-center gap-2 font-medium tabular-nums">
-              <span>{payee.rrn || "—"}</span>
-              {payee.rrn ? <CopyButton text={payee.rrn} label="복사" /> : null}
+              <span>{payee.rrn ? formatRrnInput(payee.rrn) : "—"}</span>
+              {payee.rrn ? <CopyButton text={formatRrnInput(payee.rrn)} label="복사" /> : null}
             </dd>
             {payout.collectInsurance ? (
               <>
@@ -55,13 +56,16 @@ export function PayeeCard({
             {payee.phone ? (
               <>
                 <dt className="text-muted-foreground">휴대전화</dt>
-                <dd>{payee.phone}</dd>
+                <dd>{formatPhone(payee.phone)}</dd>
               </>
             ) : null}
             <dt className="text-muted-foreground">은행</dt>
             <dd>{payee.bank}</dd>
             <dt className="text-muted-foreground">계좌</dt>
-            <dd className="tabular-nums">{payee.account}</dd>
+            <dd className="flex flex-wrap items-center gap-2 tabular-nums">
+              <span>{formatAccount(payee.account)}</span>
+              {payee.account ? <CopyButton text={formatAccount(payee.account)} label="복사" /> : null}
+            </dd>
             <dt className="text-muted-foreground">예금주</dt>
             <dd>{payee.holder}</dd>
             {payee.passportName ? (

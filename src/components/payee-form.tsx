@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ensureAnonAuth } from "@/lib/firebase";
+import { formatAccount, formatPhone, formatRrnInput } from "@/lib/format";
 import { fileToDriveJpeg } from "@/lib/image-file";
 import { submitPayee } from "@/lib/payee-inbox";
 import { payeeMissing } from "@/lib/payout-types";
@@ -93,10 +94,10 @@ export function PayeeForm({ payout }: { payout: Payout }) {
   const wantPass = Boolean(payout.collectPassport);
   const wantIns = Boolean(payout.collectInsurance);
   const [name, setName] = useState(existing?.name ?? "");
-  const [rrn, setRrn] = useState(existing?.rrn ?? "");
-  const [phone, setPhone] = useState(existing?.phone ?? "");
+  const [rrn, setRrn] = useState(formatRrnInput(existing?.rrn ?? ""));
+  const [phone, setPhone] = useState(formatPhone(existing?.phone ?? ""));
   const [bank, setBank] = useState(existing?.bank ?? "");
-  const [account, setAccount] = useState(existing?.account ?? "");
+  const [account, setAccount] = useState(formatAccount(existing?.account ?? ""));
   const [holder, setHolder] = useState(existing?.holder ?? "");
   const [idImage, setIdImage] = useState(existing?.idImageDataUrl ?? existing?.idImageUrl ?? "");
   const [idFileName, setIdFileName] = useState(existing?.idFileName ?? "");
@@ -192,7 +193,7 @@ export function PayeeForm({ payout }: { payout: Payout }) {
           type="tel"
           placeholder="010-0000-0000"
           value={phone}
-          onChange={(e) => setPhone(e.target.value)}
+          onChange={(e) => setPhone(formatPhone(e.target.value))}
           required
         />
       </div>
@@ -204,7 +205,7 @@ export function PayeeForm({ payout }: { payout: Payout }) {
           autoComplete="off"
           placeholder="000000-0000000"
           value={rrn}
-          onChange={(e) => setRrn(e.target.value)}
+          onChange={(e) => setRrn(formatRrnInput(e.target.value))}
           required
         />
       </div>
@@ -264,8 +265,9 @@ export function PayeeForm({ payout }: { payout: Payout }) {
         <Input
           id="account"
           inputMode="numeric"
+          placeholder="000-000-000000"
           value={account}
-          onChange={(e) => setAccount(e.target.value)}
+          onChange={(e) => setAccount(formatAccount(e.target.value))}
           required
         />
       </div>

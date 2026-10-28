@@ -42,7 +42,7 @@ export function kakaoOgImageMeta(seedOrSlot: string | number) {
 }
 
 /** 카카오톡이 예전 JS를 붙들고 있지 않게 공유 주소만 바꿉니다. */
-const SHARE_CACHE = "20261028d";
+const SHARE_CACHE = "20261028e";
 
 export function collectSharePath(payoutId: string, slot?: number) {
   const n = slot ?? randomKakaoOgSlot();

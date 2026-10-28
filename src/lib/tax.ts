@@ -1,5 +1,5 @@
 import type { PayeeProfile, Payout, TaxMethod } from "./types";
-import { formatPayDate } from "./format";
+import { formatAccount, formatPayDate } from "./format";
 
 export type TaxResult = {
   method: TaxMethod;
@@ -128,7 +128,9 @@ export function formatTaxMemo(input: {
   passportName?: string;
   passportNo?: string;
 }) {
-  const payLine = [input.bank, input.account, input.holder].filter(Boolean).join(" ");
+  const payLine = [input.bank, input.account ? formatAccount(input.account) : "", input.holder]
+    .filter(Boolean)
+    .join(" ");
   const last = payLine
     ? `최종 입금 예정 금액: ${formatWonPlain(input.net)}        ${payLine} 지급일 ${input.payDate}`
     : `최종 입금 예정 금액: ${formatWonPlain(input.net)}        지급일 ${input.payDate}`;

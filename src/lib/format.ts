@@ -30,6 +30,40 @@ export function formatDate(iso: string) {
   return `${get("year")}.${get("month")}.${get("day")} (${get("weekday")})`;
 }
 
+export function formatPhone(raw: string) {
+  const d = raw.replace(/\D/g, "").slice(0, 11);
+  if (!d) return "";
+  if (d.startsWith("02")) {
+    if (d.length <= 2) return d;
+    if (d.length <= 5) return `${d.slice(0, 2)}-${d.slice(2)}`;
+    if (d.length <= 9) return `${d.slice(0, 2)}-${d.slice(2, 5)}-${d.slice(5)}`;
+    return `${d.slice(0, 2)}-${d.slice(2, 6)}-${d.slice(6)}`;
+  }
+  if (d.length <= 3) return d;
+  if (d.length <= 7) return `${d.slice(0, 3)}-${d.slice(3)}`;
+  return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
+}
+
+export function formatRrnInput(raw: string) {
+  const d = raw.replace(/\D/g, "").slice(0, 13);
+  if (d.length <= 6) return d;
+  return `${d.slice(0, 6)}-${d.slice(6)}`;
+}
+
+/** 은행마다 자릿수는 달라도 읽기 쉽게 3-3-나머지, 카카오는 4-2-나머지로 나눕니다. */
+export function formatAccount(raw: string) {
+  const d = raw.replace(/\D/g, "").slice(0, 16);
+  if (!d) return "";
+  if (d.startsWith("3333") && d.length > 4) {
+    if (d.length <= 6) return `${d.slice(0, 4)}-${d.slice(4)}`;
+    return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)}`;
+  }
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `${d.slice(0, 3)}-${d.slice(3)}`;
+  if (d.length <= 13) return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
+  return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)}`;
+}
+
 export function maskRrn(rrn: string) {
   const digits = rrn.replace(/\D/g, "");
   if (digits.length < 7) return rrn || "—";
